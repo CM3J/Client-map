@@ -1,45 +1,33 @@
 import pandas as pd
+import json
 
-# Load the CSV. Based on the snippet, headers are on row 1 (index 1)
+# Load the CSV
 df = pd.read_csv('Client Map - Sheet1.csv', skiprows=1)
 
 # Clean column names
 df.columns = [c.strip() for c in df.columns]
 
-# Select and clean rows where Customer is not null
+# Filter out empty rows where Customer is missing
 df = df[df['Customer'].notna()]
 
-# Create a clean dictionary for the React code
 clients_list = []
 for i, row in df.iterrows():
     scope = []
-    if pd.notna(row['Social']) and str(row['Social']).strip().lower() != 'x' and str(row['Social']).strip() != '':
-        scope.append(f"Social: {row['Social']}")
-    elif str(row['Social']).strip().lower() == 'x':
-        scope.append('Social')
-        
-    if pd.notna(row['PPC']) and str(row['PPC']).strip().lower() != 'x' and str(row['PPC']).strip() != '':
-        scope.append(f"PPC: {row['PPC']}")
-    elif str(row['PPC']).strip().lower() == 'x':
-        scope.append('PPC')
-
-    if pd.notna(row['Creative']) and str(row['Creative']).strip().lower() != 'x' and str(row['Creative']).strip() != '':
-        scope.append(f"Creative: {row['Creative']}")
-    elif str(row['Creative']).strip().lower() == 'x':
-        scope.append('Creative')
-
-    if pd.notna(row['Ad hoc']) and str(row['Ad hoc']).strip().lower() != 'x' and str(row['Ad hoc']).strip() != '':
-        scope.append(f"Ad hoc: {row['Ad hoc']}")
-    elif str(row['Ad hoc']).strip().lower() == 'x':
-        scope.append('Ad hoc')
-
+    # Logic for scope: if 'x' just add category, if text add "Category: Text"
+    for cat in ['Social', 'PPC', 'Creative', 'Ad hoc']:
+        val = str(row[cat]).strip() if pd.notna(row[cat]) else ""
+        if val.lower() == 'x':
+            scope.append(cat)
+        elif val != "" and val.lower() != 'nan':
+            scope.append(f"{cat}: {val}")
+    
     clients_list.append({
         "id": f"c{i}",
-        "name": str(row['Customer']).strip(),
+        "name": str(row['Customer']).strip().replace('\n', ' '),
         "priority": str(row['Active']).strip() if pd.notna(row['Active']) else 'x',
         "scope": scope,
         "notes": str(row['How can we be more proactive']).strip() if pd.notna(row['How can we be more proactive']) else ''
     })
 
-import json
-print(json.dumps(clients_list, indent=2))
+# Output the full list to use in the code
+print(json.dumps(clients_list))
