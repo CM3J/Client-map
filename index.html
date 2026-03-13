@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Plus, Trash2, FileText, Search, ChevronRight, X, 
   StickyNote, Layout, ChevronDown, ChevronUp, Target, 
-  Clock, CheckCircle2, AlertCircle, Briefcase, Filter
+  Clock, CheckCircle2, AlertCircle, Briefcase, Filter, 
+  ExternalLink, BarChart3, RotateCcw, Save
 } from 'lucide-react';
 
 // Priority Configuration & Tier Meta
@@ -16,9 +17,13 @@ const TIERS = [
   { id: '-', label: 'Inactive / Archive', color: 'border-slate-300 bg-slate-100 text-slate-400', dot: 'bg-slate-300' }
 ];
 
+const DEFAULT_TIER = { label: 'Unknown Tier', color: 'border-slate-200 bg-slate-50 text-slate-400', dot: 'bg-slate-200' };
 const TIER_MAP = TIERS.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {});
 
-// FULL DATASET EXTRACTED FROM CSV (60 ENTRIES)
+// Storage Key
+const STORAGE_KEY = 'client_strategy_portfolio_v1';
+
+// FULL DATASET (60 ENTRIES)
 const INITIAL_DATA = [
   {"id":"c0","name":"TBE Africa Pty (Ltd)","priority":"P2","scope":["Social: 3/week (Ryan)","PPC: Meta & Google","Creative: Web design"],"notes":"LinkedIn as an opportunity? Follow-up on web design proposal. Focus more."},
   {"id":"c1","name":"BikeMarket.co.za","priority":"P4","scope":["Creative","Ad hoc: Web support"],"notes":""},
@@ -83,18 +88,36 @@ const INITIAL_DATA = [
 ];
 
 const App = () => {
-  const [clients, setClients] = useState(INITIAL_DATA);
-  const [selectedId, setSelectedId] = useState(INITIAL_DATA[0].id);
+  // 1. Initialize State from LocalStorage or Default
+  const [clients, setClients] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : INITIAL_DATA;
+  });
+
+  const [selectedId, setSelectedId] = useState(() => clients[0]?.id);
   const [searchTerm, setSearchTerm] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
-  const [expandedTiers, setExpandedTiers] = useState(['P1', 'P2', 'P3', 'P4']);
+  const [expandedTiers, setExpandedTiers] = useState(['P1', 'P2', 'P3', 'P4', 'x']);
+  const [lastSaved, setLastSaved] = useState(null);
 
-  // Active client derived from state
-  const activeClient = useMemo(() => 
-    clients.find(c => c.id === selectedId) || clients[0], 
-  [clients, selectedId]);
+  // 2. Sync to LocalStorage on Change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+    setLastSaved(new Date().toLocaleTimeString());
+  }, [clients]);
 
-  // Filtering and Grouping logic
+  // Active client lookup with safety fallback
+  const activeClient = useMemo(() => {
+    const found = clients.find(c => c.id === selectedId);
+    return found || clients[0];
+  }, [clients, selectedId]);
+
+  // Derived tier data with safety fallback
+  const currentTier = useMemo(() => {
+    return TIER_MAP[activeClient?.priority] || DEFAULT_TIER;
+  }, [activeClient]);
+
+  // Filtering and Grouping
   const filteredClients = useMemo(() => {
     return clients.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -116,7 +139,7 @@ const App = () => {
   };
 
   const deleteClient = (id) => {
-    if (confirm("Permanently delete this client?")) {
+    if (confirm("Delete this client record? This action will be saved.")) {
       const remaining = clients.filter(c => c.id !== id);
       setClients(remaining);
       if (selectedId === id && remaining.length > 0) setSelectedId(remaining[0].id);
@@ -125,17 +148,17 @@ const App = () => {
 
   const addClient = () => {
     const newId = `c${Date.now()}`;
-    const newC = { id: newId, name: 'Untitled Client', priority: 'x', scope: [], notes: '' };
+    const newC = { id: newId, name: 'New Client Record', priority: 'x', scope: [], notes: '', lastUpdated: new Date().toISOString() };
     setClients([newC, ...clients]);
     setSelectedId(newId);
   };
 
   const toggleService = (service) => {
-    const current = activeClient.scope || [];
-    const next = current.includes(service) 
-      ? current.filter(s => s !== service) 
-      : [...current, service];
-    updateClient(activeClient.id, { scope: next });
+    const currentScope = activeClient.scope || [];
+    const updated = currentScope.includes(service) 
+      ? currentScope.filter(s => s !== service) 
+      : [...currentScope, service];
+    updateClient(activeClient.id, { scope: updated });
   };
 
   const handleAddService = (e) => {
@@ -147,26 +170,34 @@ const App = () => {
     setNewServiceName('');
   };
 
-  const toggleTier = (tierId) => {
+  const toggleTierCollapse = (tierId) => {
     setExpandedTiers(prev => 
       prev.includes(tierId) ? prev.filter(t => t !== tierId) : [...prev, tierId]
     );
   };
 
+  const resetToDefaults = () => {
+    if (confirm("Warning: This will overwrite all your current changes with the original spreadsheet data. Proceed?")) {
+      setClients(INITIAL_DATA);
+      setSelectedId(INITIAL_DATA[0].id);
+    }
+  };
+
   return (
-    <div className="flex h-screen w-full bg-[#F1F3F6] font-sans text-slate-900 overflow-hidden">
+    <div className="flex h-screen w-full bg-[#F5F7F9] font-sans text-slate-900 overflow-hidden">
       
       {/* SIDEBAR */}
-      <aside className="w-[340px] bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
-        {/* Sidebar Header */}
-        <div className="p-6 pb-4 bg-white sticky top-0 z-20">
+      <aside className="w-[340px] bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden shadow-sm">
+        {/* Header */}
+        <div className="p-6 bg-white border-b border-slate-100 sticky top-0 z-20">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
-              <Target className="text-blue-600" size={26} /> Portfolio
+              <Target className="text-blue-600" size={24} /> Portfolio
             </h1>
             <button 
               onClick={addClient}
-              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg active:scale-95"
+              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-95"
+              title="Add Client"
             >
               <Plus size={20} />
             </button>
@@ -176,25 +207,25 @@ const App = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder="Filter 60+ accounts..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+              placeholder="Search 60+ accounts..." 
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Sidebar Scrollable Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pb-8">
+        {/* List Body */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4">
           {groupedClients.map(tier => (
             <div key={tier.id} className="mb-2">
               <button 
-                onClick={() => toggleTier(tier.id)}
+                onClick={() => toggleTierCollapse(tier.id)}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors group"
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
-                  <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-slate-700">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-700">
                     {tier.label} <span className="opacity-50 ml-1">({tier.items.length})</span>
                   </span>
                 </div>
@@ -202,168 +233,195 @@ const App = () => {
               </button>
               
               {expandedTiers.includes(tier.id) && (
-                <div className="space-y-1 mt-1 pl-2">
+                <div className="space-y-1 mt-1 pl-1">
                   {tier.items.map(client => (
                     <button
                       key={client.id}
                       onClick={() => setSelectedId(client.id)}
-                      className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between group transition-all text-left ${selectedId === client.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'hover:bg-blue-50/50 text-slate-700'}`}
+                      className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between group transition-all text-left ${selectedId === client.id ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-blue-50/50 text-slate-700'}`}
                     >
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 pr-2">
                         <p className={`text-sm font-bold truncate leading-tight ${selectedId === client.id ? 'text-white' : 'text-slate-800'}`}>
                           {client.name}
                         </p>
-                        <p className={`text-[10px] mt-1 font-bold tracking-wider uppercase opacity-50`}>
-                          {client.scope.length} Work Items
-                        </p>
                       </div>
-                      <ChevronRight size={14} className={`shrink-0 transition-transform ${selectedId === client.id ? 'translate-x-1' : 'opacity-0 group-hover:opacity-100'}`} />
+                      <ChevronRight size={14} className={`shrink-0 transition-transform ${selectedId === client.id ? 'text-white translate-x-1' : 'opacity-0 group-hover:opacity-100'}`} />
                     </button>
                   ))}
-                  {tier.items.length === 0 && <p className="text-[10px] text-slate-300 italic pl-4 py-2">No entries</p>}
                 </div>
               )}
             </div>
           ))}
         </div>
+
+        {/* Sidebar Footer - Reset Control */}
+        <div className="p-4 bg-slate-50 border-t border-slate-200">
+          <button 
+            onClick={resetToDefaults}
+            className="w-full flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <RotateCcw size={12} /> Reset to Spreadsheet Defaults
+          </button>
+        </div>
       </aside>
 
-      {/* MAIN VIEW */}
-      <main className="flex-1 overflow-y-auto bg-[#F1F3F6] flex flex-col min-w-0">
-        <div className="max-w-6xl w-full mx-auto p-8 lg:p-12">
-          
-          {/* Header Card */}
-          <header className="bg-white rounded-[2.5rem] p-8 lg:p-10 shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-4">
-                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${TIER_MAP[activeClient.priority].color}`}>
-                  {TIER_MAP[activeClient.priority].label}
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-full uppercase">
-                  <Clock size={12} /> Live Strategy View
-                </span>
-              </div>
-              <input 
-                type="text" 
-                value={activeClient.name}
-                onChange={(e) => updateClient(activeClient.id, { name: e.target.value })}
-                className="text-4xl lg:text-5xl font-black text-slate-900 bg-transparent border-none focus:ring-0 w-full p-0 leading-tight"
-                placeholder="Client Name"
-              />
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <select 
-                value={activeClient.priority}
-                onChange={(e) => updateClient(activeClient.id, { priority: e.target.value })}
-                className="h-12 px-6 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-600 uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer shadow-inner"
-              >
-                {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-              <button 
-                onClick={() => deleteClient(activeClient.id)}
-                className="h-12 w-12 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all border border-slate-200"
-              >
-                <Trash2 size={22} />
-              </button>
-            </div>
-          </header>
-
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* SCOPE MANAGEMENT (2 Cols) */}
-            <section className="lg:col-span-2 space-y-6">
-              <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                    <Briefcase className="text-blue-600" size={24} /> Scope of Work
-                  </h3>
-                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
-                    {activeClient.scope.length}
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto flex flex-col min-w-0 bg-[#F5F7F9]">
+        {activeClient ? (
+          <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 space-y-8 animate-in fade-in duration-500">
+            
+            {/* Header Card */}
+            <header className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${currentTier.color}`}>
+                    {currentTier.label}
+                  </span>
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full uppercase tracking-wider">
+                    <Save size={12} className="text-emerald-500" /> Saved at {lastSaved}
                   </div>
                 </div>
-
-                <form onSubmit={handleAddService} className="relative mb-8 group">
-                  <input 
-                    type="text" 
-                    placeholder="Add item (e.g. PPC Strategy)..." 
-                    className="w-full pl-6 pr-14 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all outline-none"
-                    value={newServiceName}
-                    onChange={(e) => setNewServiceName(e.target.value)}
-                  />
-                  <button type="submit" className="absolute right-2 top-2 w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-blue-600 transition-all shadow-lg shadow-slate-200">
-                    <Plus size={20} />
-                  </button>
-                </form>
-
-                <div className="space-y-3">
-                  {activeClient.scope.length > 0 ? (
-                    activeClient.scope.map((service, idx) => (
-                      <div 
-                        key={idx}
-                        className="flex items-center justify-between px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:bg-white hover:border-blue-100 hover:shadow-xl transition-all animate-in fade-in slide-in-from-left-2 duration-300"
-                      >
-                        <span className="text-sm font-bold text-slate-700 pr-4 leading-snug">{service}</span>
-                        <button 
-                          onClick={() => toggleService(service)}
-                          className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-16 text-center border-4 border-dashed border-slate-50 rounded-[2.5rem]">
-                      <AlertCircle className="mx-auto text-slate-200 mb-3" size={40} />
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-300">No active work items</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            {/* PROACTIVE NOTES (3 Cols) */}
-            <section className="lg:col-span-3">
-              <div className="bg-white rounded-[2.5rem] p-8 lg:p-10 shadow-sm border border-slate-200 h-full min-h-[600px] flex flex-col">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                    <StickyNote className="text-orange-500" size={24} /> Proactive Strategy
-                  </h3>
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase text-orange-400 tracking-widest bg-orange-50 px-3 py-1 rounded-full">
-                    <CheckCircle2 size={12} /> Auto-Saving
-                  </div>
-                </div>
-
-                <textarea 
-                  value={activeClient.notes}
-                  onChange={(e) => updateClient(activeClient.id, { notes: e.target.value })}
-                  placeholder="How can we be more proactive with this client? List growth opportunities, specific brand goals, or upcoming follow-ups..."
-                  className="flex-1 w-full p-8 bg-orange-50/10 border border-orange-100 rounded-[2rem] text-slate-700 text-base font-medium leading-relaxed outline-none focus:ring-4 focus:ring-orange-500/5 transition-all resize-none shadow-inner scrollbar-hide"
+                <input 
+                  type="text" 
+                  value={activeClient.name}
+                  onChange={(e) => updateClient(activeClient.id, { name: e.target.value })}
+                  className="text-4xl lg:text-5xl font-black text-slate-900 bg-transparent border-none focus:ring-0 w-full p-0 leading-tight outline-none"
+                  placeholder="Client Name"
                 />
-                
-                <div className="mt-8 grid grid-cols-2 gap-4">
-                  <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">Growth Lever</p>
-                    <p className="text-xs font-bold text-blue-800 leading-relaxed italic">
-                      "Delight the client by mapping Social opportunities mentioned in your sheet."
-                    </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <select 
+                  value={activeClient.priority}
+                  onChange={(e) => updateClient(activeClient.id, { priority: e.target.value })}
+                  className="h-12 px-6 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-600 uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer shadow-sm"
+                >
+                  {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                <button 
+                  onClick={() => deleteClient(activeClient.id)}
+                  className="h-12 w-12 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all border border-slate-100"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            </header>
+
+            {/* Grid for Scope and Notes */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Scope */}
+              <section className="lg:col-span-5 space-y-6">
+                <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                      <Briefcase className="text-blue-600" size={24} /> Scope of Work
+                    </h3>
+                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
+                      {activeClient.scope.length}
+                    </div>
                   </div>
-                  <div className="p-5 bg-purple-50/50 rounded-3xl border border-purple-100">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 mb-1">Portfolio Status</p>
-                    <p className="text-xs font-bold text-purple-800 leading-relaxed italic">
-                      Client is currently {activeClient.scope.length}x services active in {TIER_MAP[activeClient.priority].label}.
-                    </p>
+
+                  <form onSubmit={handleAddService} className="relative mb-8 group">
+                    <input 
+                      type="text" 
+                      placeholder="Add service item..." 
+                      className="w-full pl-6 pr-14 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all outline-none"
+                      value={newServiceName}
+                      onChange={(e) => setNewServiceName(e.target.value)}
+                    />
+                    <button type="submit" className="absolute right-2 top-2 w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-blue-600 transition-all shadow-md">
+                      <Plus size={20} />
+                    </button>
+                  </form>
+
+                  <div className="space-y-2">
+                    {activeClient.scope.length > 0 ? (
+                      activeClient.scope.map((service, idx) => (
+                        <div 
+                          key={idx}
+                          className="flex items-center justify-between px-5 py-3.5 bg-slate-50/50 border border-slate-100 rounded-2xl group hover:bg-white hover:border-blue-100 hover:shadow-md transition-all duration-200"
+                        >
+                          <span className="text-sm font-bold text-slate-700 pr-4 leading-snug">{service}</span>
+                          <button 
+                            onClick={() => toggleService(service)}
+                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-16 text-center border-4 border-dashed border-slate-50 rounded-[2rem]">
+                        <AlertCircle className="mx-auto text-slate-200 mb-2" size={32} />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Scope is currently empty</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            </section>
+                
+                {/* Visual Insight Card */}
+                <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2rem] p-8 text-white shadow-lg shadow-blue-200 overflow-hidden relative group">
+                  <div className="relative z-10">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-2">Service Density</h4>
+                    <p className="text-2xl font-black mb-4">Focus on Growth</p>
+                    <div className="flex items-center gap-4">
+                      <BarChart3 size={32} />
+                      <p className="text-sm font-medium opacity-90 leading-relaxed">
+                        Data is persistent. Changes made to {activeClient.name} are stored in your browser.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                    <Target size={160} />
+                  </div>
+                </div>
+              </section>
+
+              {/* Right Column: Notes */}
+              <section className="lg:col-span-7 h-full">
+                <div className="bg-white rounded-[2rem] p-8 lg:p-10 shadow-sm border border-slate-200 flex flex-col min-h-[600px] h-full">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                      <StickyNote className="text-orange-500" size={24} /> Strategy & Notes
+                    </h3>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase text-orange-400 tracking-widest bg-orange-50 px-3 py-1 rounded-full">
+                      <CheckCircle2 size={12} /> Auto-Saving enabled
+                    </div>
+                  </div>
+
+                  <textarea 
+                    value={activeClient.notes}
+                    onChange={(e) => updateClient(activeClient.id, { notes: e.target.value })}
+                    placeholder="List proactive growth opportunities, brand goals, or follow-ups for this client..."
+                    className="flex-1 w-full p-8 bg-orange-50/10 border border-orange-100 rounded-3xl text-slate-700 text-base font-medium leading-relaxed outline-none focus:ring-4 focus:ring-orange-500/5 transition-all resize-none shadow-inner scrollbar-hide"
+                  />
+                  
+                  <div className="mt-8 flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <AlertCircle size={14} className="text-blue-500" /> Reference ID: {activeClient.id}
+                    </div>
+                    <button className="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1">
+                      Export Summary <ExternalLink size={12} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-6">
+            <Layout size={64} className="animate-pulse" />
+            <p className="text-sm font-black uppercase tracking-[0.3em]">Select a client from the portfolio</p>
+          </div>
+        )}
       </main>
 
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
