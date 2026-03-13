@@ -1,319 +1,45 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Trash2, 
-  FileText, 
-  Search, 
-  ChevronRight, 
-  X,
-  StickyNote,
-  Layout,
-  ChevronDown,
-  ChevronUp
-} from 'lucide-react';
+import pandas as pd
 
-// Priority configuration
-const PRIORITY_CONFIG = [
-  { id: 'P1', label: 'Tier 1 (High)', color: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500' },
-  { id: 'P2', label: 'Tier 2', color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  { id: 'P3', label: 'Tier 3', color: 'bg-blue-100 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
-  { id: 'P4', label: 'Tier 4 (Low)', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  { id: 'x', label: 'Unassigned', color: 'bg-slate-100 text-slate-500 border-slate-200', dot: 'bg-slate-300' },
-  { id: '?', label: 'Pending', color: 'bg-purple-100 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
-  { id: '-', label: 'Inactive', color: 'bg-slate-100 text-slate-400 border-slate-200', dot: 'bg-slate-200' }
-];
+# Load the CSV. Based on the snippet, headers are on row 1 (index 1)
+df = pd.read_csv('Client Map - Sheet1.csv', skiprows=1)
 
-const PRIORITY_MAP = PRIORITY_CONFIG.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {});
+# Clean column names
+df.columns = [c.strip() for c in df.columns]
 
-const INITIAL_CLIENTS = [
-  { id: 'c1', name: 'TBE Africa Pty (Ltd)', priority: 'P2', scope: ['Social: 3 per week (Ryan)', 'PPC: Meta & Google', 'Creative: Web design'], notes: 'LinkedIn as an opportunity for them? Brand awareness. Follow-up on web design proposal. Need to do more? Focus more.' },
-  { id: 'c2', name: 'BikeMarket.co.za', priority: 'P4', scope: ['Creative: General Support', 'Ad hoc: Kinda look at their website once in a while'], notes: '' },
-  { id: 'c3', name: 'Drone Ops (Pty) Ltd', priority: 'P3', scope: ['PPC: Low level brand awareness', 'Creative: Ad hoc'], notes: 'Social as an opportunity.' },
-  { id: 'c4', name: 'Bophelong Construction (Pty) Ltd', priority: 'P4', scope: ['Social: 1 post a week', 'Creative: SEO work'], notes: '' },
-  { id: 'c5', name: 'Bushtec', priority: 'P3', scope: ['PPC: Lead Gen (Safari/RCSSA)', 'Creative: Ad hoc web work', 'Ad hoc: Social media video'], notes: '' },
-  { id: 'c6', name: 'Fetola', priority: 'P2', scope: ['Creative Services', 'Ad hoc Support'], notes: '' },
-  { id: 'c7', name: 'Molare Meats', priority: 'P2', scope: ['Social: 1 a week', 'PPC: Brand awareness', 'Creative: Label designs etc'], notes: '' },
-  { id: 'c8', name: 'Superior Filtration', priority: 'P3', scope: ['PPC: Retargeting campaign', 'Creative: SEO !!!!'], notes: '' },
-  { id: 'c9', name: 'EBK', priority: 'P2', scope: ['PPC: Meta and Tik Tok', 'Creative: Hosting'], notes: 'Track the goals we need to hit? GHL implementation.' },
-  { id: 'c10', name: 'Thorndale Safari', priority: 'x', scope: ['PPC: Google ads', 'Ad hoc: Web ad hoc'], notes: '' },
-  { id: 'c11', name: 'JH Group- Trennerys', priority: 'P3', scope: ['PPC'], notes: '' },
-  { id: 'c12', name: 'CORNICE', priority: 'x', scope: ['PPC: Revenue Scaling', 'Creative: New Shopify Site', 'Ad hoc: 3D Videos'], notes: 'Need to look at scaling Revenue month on month. Traffic increase - Foot traffic in store. What is happening with the 3D Videos? Delight the Client.' },
-  { id: 'c13', name: 'LODEC', priority: 'x', scope: ['Social', 'Creative'], notes: 'What is the status of the growth we are promised?' },
-  { id: 'c14', name: 'Radley Private School/Raizcorp', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c15', name: 'Pitch & Polish/Raizecorp', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c16', name: 'Arize/Raizcorp', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c17', name: 'Raizcorp Website Development', priority: 'x', scope: ['Creative'], notes: '' },
-  { id: 'c18', name: 'Downtown', priority: 'x', scope: ['Ad hoc'], notes: '' },
-  { id: 'c19', name: 'Hotel Savoy', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c20', name: 'Cars2Cash', priority: 'x', scope: ['Social', 'PPC'], notes: '' },
-  { id: 'c21', name: 'Welwaze', priority: 'x', scope: ['Social', 'Creative'], notes: '' },
-  { id: 'c22', name: 'CBK', priority: 'x', scope: ['Social', 'PPC'], notes: '' },
-  { id: 'c23', name: 'LK Jewellery', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c24', name: 'iFind Leaks', priority: 'x', scope: ['Social'], notes: '' },
-  { id: 'c25', name: 'Boss Leads LLC', priority: 'x', scope: ['Social', 'PPC', 'Creative'], notes: '' },
-  { id: 'c26', name: 'FEAC Engineering', priority: 'x', scope: ['Creative'], notes: '' },
-  { id: 'c27', name: 'Helixiora', priority: 'x', scope: ['Social', 'Creative'], notes: '' },
-  { id: 'c28', name: 'Bunk Hotels', priority: 'x', scope: ['Social', 'Creative'], notes: '' },
-  { id: 'c29', name: 'The Usual', priority: 'P1', scope: ['Social', 'PPC', 'Creative'], notes: '' },
-  { id: 'c30', name: 'Max Hotels', priority: 'P1', scope: ['Social', 'PPC', 'Creative'], notes: '' },
-  { id: 'c31', name: 'New Sapience', priority: 'x', scope: ['Social', 'PPC', 'Creative'], notes: '' },
-  { id: 'c32', name: 'Matters Capital', priority: '-', scope: ['Ad hoc'], notes: '' },
-  { id: 'c33', name: 'Brainboss', priority: 'x', scope: ['Social', 'PPC', 'Creative'], notes: '' },
-  { id: 'c34', name: 'T3', priority: 'x', scope: [], notes: '' },
-  { id: 'c35', name: 'Freedom Ventures', priority: '?', scope: ['Creative'], notes: '' },
-  { id: 'c36', name: 'Pygio', priority: '-', scope: [], notes: '' },
-  { id: 'c37', name: 'Auxo Digital', priority: '-', scope: [], notes: '' }
-].map(c => ({ ...c, lastUpdated: new Date().toISOString() }));
+# Select and clean rows where Customer is not null
+df = df[df['Customer'].notna()]
 
-const SidebarGroup = ({ title, clients, selectedId, onSelect, dotColor }) => {
-  const [isOpen, setIsOpen] = useState(true);
-  if (clients.length === 0) return null;
+# Create a clean dictionary for the React code
+clients_list = []
+for i, row in df.iterrows():
+    scope = []
+    if pd.notna(row['Social']) and str(row['Social']).strip().lower() != 'x' and str(row['Social']).strip() != '':
+        scope.append(f"Social: {row['Social']}")
+    elif str(row['Social']).strip().lower() == 'x':
+        scope.append('Social')
+        
+    if pd.notna(row['PPC']) and str(row['PPC']).strip().lower() != 'x' and str(row['PPC']).strip() != '':
+        scope.append(f"PPC: {row['PPC']}")
+    elif str(row['PPC']).strip().lower() == 'x':
+        scope.append('PPC')
 
-  return (
-    <div className="mb-2">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-6 py-2 flex items-center justify-between bg-slate-50/50 hover:bg-slate-100 transition-colors border-y border-slate-100"
-      >
-        <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-          {title} ({clients.length})
-        </span>
-        {isOpen ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
-      </button>
-      {isOpen && (
-        <div className="animate-in slide-in-from-top-1 duration-200">
-          {clients.map(client => (
-            <button
-              key={client.id}
-              onClick={() => onSelect(client.id)}
-              className={`w-full px-8 py-3.5 flex items-center justify-between border-b border-slate-50 group transition-all ${selectedId === client.id ? 'bg-blue-50/80 border-r-4 border-blue-600' : 'hover:bg-blue-50/20'}`}
-            >
-              <div className="text-left overflow-hidden">
-                <p className={`font-semibold truncate text-sm ${selectedId === client.id ? 'text-blue-900' : 'text-slate-700'}`}>
-                  {client.name}
-                </p>
-                <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                  {client.scope.length} Services
-                </p>
-              </div>
-              <ChevronRight size={14} className={`text-slate-300 transition-transform group-hover:translate-x-1 ${selectedId === client.id ? 'text-blue-400' : ''}`} />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+    if pd.notna(row['Creative']) and str(row['Creative']).strip().lower() != 'x' and str(row['Creative']).strip() != '':
+        scope.append(f"Creative: {row['Creative']}")
+    elif str(row['Creative']).strip().lower() == 'x':
+        scope.append('Creative')
 
-const App = () => {
-  const [clients, setClients] = useState(INITIAL_CLIENTS);
-  const [selectedClientId, setSelectedClientId] = useState(INITIAL_CLIENTS[0].id);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [newServiceName, setNewServiceName] = useState('');
+    if pd.notna(row['Ad hoc']) and str(row['Ad hoc']).strip().lower() != 'x' and str(row['Ad hoc']).strip() != '':
+        scope.append(f"Ad hoc: {row['Ad hoc']}")
+    elif str(row['Ad hoc']).strip().lower() == 'x':
+        scope.append('Ad hoc')
 
-  const activeClient = useMemo(() => 
-    clients.find(c => c.id === selectedClientId) || clients[0], 
-  [clients, selectedClientId]);
+    clients_list.append({
+        "id": f"c{i}",
+        "name": str(row['Customer']).strip(),
+        "priority": str(row['Active']).strip() if pd.notna(row['Active']) else 'x',
+        "scope": scope,
+        "notes": str(row['How can we be more proactive']).strip() if pd.notna(row['How can we be more proactive']) else ''
+    })
 
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [clients, searchTerm]);
-
-  // Group clients for the sidebar
-  const groupedClients = useMemo(() => {
-    return PRIORITY_CONFIG.map(config => ({
-      ...config,
-      items: filteredClients.filter(c => c.priority === config.id)
-    }));
-  }, [filteredClients]);
-
-  const updateClient = (id, updates) => {
-    setClients(prev => prev.map(client => 
-      client.id === id ? { ...client, ...updates, lastUpdated: new Date().toISOString() } : client
-    ));
-  };
-
-  const removeClient = (id) => {
-    const remaining = clients.filter(c => c.id !== id);
-    setClients(remaining);
-    if (selectedClientId === id && remaining.length > 0) {
-      setSelectedClientId(remaining[0].id);
-    }
-  };
-
-  const addClient = () => {
-    const newId = `new-${Date.now()}`;
-    const newC = { id: newId, name: 'New Client', priority: 'x', scope: [], notes: '', lastUpdated: new Date().toISOString() };
-    setClients([newC, ...clients]);
-    setSelectedClientId(newId);
-  };
-
-  const toggleService = (service) => {
-    const currentScope = activeClient.scope || [];
-    if (currentScope.includes(service)) {
-      updateClient(activeClient.id, { scope: currentScope.filter(s => s !== service) });
-    } else {
-      updateClient(activeClient.id, { scope: [...currentScope, service] });
-    }
-  };
-
-  const addNewService = (e) => {
-    e.preventDefault();
-    if (!newServiceName.trim()) return;
-    if (!activeClient.scope.includes(newServiceName)) {
-      updateClient(activeClient.id, { scope: [...activeClient.scope, newServiceName.trim()] });
-    }
-    setNewServiceName('');
-  };
-
-  return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      {/* Sidebar Navigation */}
-      <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-xl">
-        <div className="p-6 bg-white sticky top-0 z-20">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold flex items-center gap-2 text-blue-900">
-              <Users className="text-blue-600" size={24} />
-              Portfolio
-            </h1>
-            <button onClick={addClient} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-md active:scale-95">
-              <Plus size={18} />
-            </button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Filter list..." 
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto pb-10">
-          {groupedClients.map(group => (
-            <SidebarGroup 
-              key={group.id} 
-              title={group.label} 
-              clients={group.items} 
-              selectedId={selectedClientId} 
-              onSelect={setSelectedClientId} 
-              dotColor={group.dot}
-            />
-          ))}
-        </div>
-
-        <div className="p-4 bg-slate-50 border-t border-slate-200 text-center">
-           <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em]">Strategy Control Center</p>
-        </div>
-      </aside>
-
-      {/* Main Client Dashboard */}
-      <main className="flex-1 overflow-y-auto bg-slate-50">
-        {activeClient ? (
-          <div className="max-w-4xl mx-auto p-8 lg:p-12">
-            <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-              <div className="flex-1">
-                <input 
-                  type="text" 
-                  value={activeClient.name}
-                  onChange={(e) => updateClient(activeClient.id, { name: e.target.value })}
-                  className="text-4xl font-black text-slate-900 bg-transparent border-none focus:ring-0 focus:outline-none w-full p-0"
-                />
-                <div className="flex items-center gap-4 mt-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Tier:</span>
-                    <select 
-                      value={activeClient.priority}
-                      onChange={(e) => updateClient(activeClient.id, { priority: e.target.value })}
-                      className={`text-xs font-bold px-4 py-1.5 rounded-full border appearance-none cursor-pointer focus:outline-none shadow-sm ${PRIORITY_MAP[activeClient.priority]?.color || 'bg-slate-100'}`}
-                    >
-                      {PRIORITY_CONFIG.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                    </select>
-                  </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Last Modified: {new Date(activeClient.lastUpdated).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => removeClient(activeClient.id)} className="flex items-center gap-2 px-4 py-2 text-red-500 font-bold text-xs hover:bg-red-50 rounded-lg transition-colors">
-                <Trash2 size={16} />
-                Delete Record
-              </button>
-            </header>
-
-            <div className="grid grid-cols-1 gap-8">
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                    <FileText className="text-blue-500" size={20} />
-                    Current Scope
-                  </h3>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                    {activeClient.scope.length} Work Items
-                  </span>
-                </div>
-
-                <form onSubmit={addNewService} className="flex gap-2 mb-6">
-                  <input 
-                    type="text" 
-                    placeholder="Add new service or deliverable..." 
-                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    value={newServiceName}
-                    onChange={(e) => setNewServiceName(e.target.value)}
-                  />
-                  <button type="submit" className="px-6 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-all font-bold text-sm shadow-lg">
-                    Add
-                  </button>
-                </form>
-
-                <div className="flex flex-wrap gap-2">
-                  {activeClient.scope.length > 0 ? (
-                    activeClient.scope.map((service, idx) => (
-                      <div key={idx} className="flex items-center gap-3 px-5 py-2.5 bg-slate-50 text-slate-700 rounded-2xl text-sm font-semibold border border-slate-200 group animate-in zoom-in duration-200">
-                        {service}
-                        <button onClick={() => toggleService(service)} className="hover:text-red-500 transition-colors opacity-30 group-hover:opacity-100">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="w-full py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl text-slate-400 text-sm italic">
-                      Scope is currently empty.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200">
-                <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
-                  <StickyNote className="text-orange-500" size={20} />
-                  Strategy Notes
-                </h3>
-                <textarea 
-                  value={activeClient.notes}
-                  onChange={(e) => updateClient(activeClient.id, { notes: e.target.value })}
-                  placeholder="Proactive steps and strategy goals..."
-                  className="w-full h-80 p-8 bg-orange-50/10 border border-orange-100 rounded-[1.5rem] text-slate-700 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-orange-500/10 transition-all resize-none font-medium"
-                />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
-            <Layout size={64} className="text-slate-100" />
-            <p className="text-lg font-medium text-slate-300 uppercase tracking-widest">Select a record to begin</p>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-};
-
-export default App;
+import json
+print(json.dumps(clients_list, indent=2))
