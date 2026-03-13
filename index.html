@@ -1,432 +1,313 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Users, Plus, Trash2, FileText, Search, ChevronRight, X, 
-  StickyNote, Layout, ChevronDown, ChevronUp, Target, 
-  Clock, CheckCircle2, AlertCircle, Briefcase, Filter, 
-  ExternalLink, BarChart3, RotateCcw, Save
-} from 'lucide-react';
-
-// Priority Configuration & Tier Meta
-const TIERS = [
-  { id: 'P1', label: 'Tier 1 (High Value)', color: 'border-red-500 bg-red-50 text-red-700', dot: 'bg-red-500' },
-  { id: 'P2', label: 'Tier 2 (Growth)', color: 'border-orange-500 bg-orange-50 text-orange-700', dot: 'bg-orange-500' },
-  { id: 'P3', label: 'Tier 3 (Standard)', color: 'border-blue-500 bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
-  { id: 'P4', label: 'Tier 4 (Low Touch)', color: 'border-emerald-500 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-  { id: 'x', label: 'Unassigned', color: 'border-slate-400 bg-slate-50 text-slate-600', dot: 'bg-slate-400' },
-  { id: '?', label: 'Pending / Lead', color: 'border-purple-500 bg-purple-50 text-purple-700', dot: 'bg-purple-500' },
-  { id: '-', label: 'Inactive / Archive', color: 'border-slate-300 bg-slate-100 text-slate-400', dot: 'bg-slate-300' }
-];
-
-const DEFAULT_TIER = { label: 'Unknown Tier', color: 'border-slate-200 bg-slate-50 text-slate-400', dot: 'bg-slate-200' };
-const TIER_MAP = TIERS.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {});
-
-// Storage Key
-const STORAGE_KEY = 'client_strategy_portfolio_v1';
-
-// FULL DATASET (60 ENTRIES)
-const INITIAL_DATA = [
-  {"id":"c0","name":"TBE Africa Pty (Ltd)","priority":"P2","scope":["Social: 3/week (Ryan)","PPC: Meta & Google","Creative: Web design"],"notes":"LinkedIn as an opportunity? Follow-up on web design proposal. Focus more."},
-  {"id":"c1","name":"BikeMarket.co.za","priority":"P4","scope":["Creative","Ad hoc: Web support"],"notes":""},
-  {"id":"c2","name":"Drone Ops (Pty) Ltd","priority":"P3","scope":["PPC: Brand awareness","Creative: Ad hoc"],"notes":"Social as an opportunity"},
-  {"id":"c3","name":"Bophelong Construction","priority":"P4","scope":["Social: 1/week","Creative: SEO work"],"notes":""},
-  {"id":"c4","name":"Bushtec","priority":"P3","scope":["PPC: Lead Gen","Creative: Web work","Ad hoc: Video"],"notes":""},
-  {"id":"c5","name":"Fetola","priority":"P2","scope":["PPC: Brand awareness","Creative","Ad hoc"],"notes":""},
-  {"id":"c6","name":"Molare Meats","priority":"P2","scope":["Social: 1/week","PPC: Awareness","Creative: Label designs"],"notes":""},
-  {"id":"c7","name":"Superior Filtration","priority":"P3","scope":["PPC: Retargeting","Creative: SEO"],"notes":""},
-  {"id":"c8","name":"EBK","priority":"P2","scope":["PPC: Meta/TikTok","Creative: Hosting"],"notes":"Track goals. GHL implementation."},
-  {"id":"c9","name":"Thorndale Safari","priority":"x","scope":["PPC: Google ads","Ad hoc: Web"],"notes":""},
-  {"id":"c10","name":"JH Group- Trennerys","priority":"P3","scope":["PPC"],"notes":""},
-  {"id":"c11","name":"CORNICE","priority":"x","scope":["PPC: Scaling Revenue","Creative: Shopify","Ad hoc: 3D Videos"],"notes":"Traffic increase. Delight the client."},
-  {"id":"c12","name":"LODEC","priority":"x","scope":["PPC","Creative"],"notes":"Growth status?"},
-  {"id":"c13","name":"Radley Private School","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c14","name":"Pitch & Polish","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c15","name":"Arize/Raizcorp","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c16","name":"Raizcorp Web Dev","priority":"x","scope":["Creative"],"notes":""},
-  {"id":"c17","name":"Downtown","priority":"x","scope":["Ad hoc"],"notes":""},
-  {"id":"c18","name":"Hotel Savoy","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c19","name":"Cars2Cash","priority":"x","scope":["Social","PPC"],"notes":""},
-  {"id":"c20","name":"Welwaze","priority":"x","scope":["Social","Creative"],"notes":""},
-  {"id":"c21","name":"CBK","priority":"x","scope":["Social","PPC"],"notes":""},
-  {"id":"c22","name":"LK Jewellery","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c23","name":"iFind Leaks","priority":"x","scope":["PPC"],"notes":""},
-  {"id":"c24","name":"Boss Leads LLC","priority":"x","scope":["Social","PPC","Creative"],"notes":""},
-  {"id":"c25","name":"FEAC Engineering","priority":"x","scope":["Creative"],"notes":""},
-  {"id":"c26","name":"Helixiora","priority":"x","scope":["PPC","Creative"],"notes":""},
-  {"id":"c27","name":"Bunk Hotels","priority":"x","scope":["PPC","Creative"],"notes":""},
-  {"id":"c28","name":"The Usual","priority":"P1","scope":["Social","PPC","Creative"],"notes":""},
-  {"id":"c29","name":"Max Hotels","priority":"P1","scope":["Social","PPC","Creative"],"notes":""},
-  {"id":"c30","name":"New Sapience","priority":"x","scope":["Social","PPC","Creative"],"notes":""},
-  {"id":"c31","name":"Matters Capital","priority":"-","scope":["Ad hoc"],"notes":""},
-  {"id":"c32","name":"Brainboss","priority":"x","scope":["Social","PPC","Creative"],"notes":""},
-  {"id":"c33","name":"T3","priority":"x","scope":[],"notes":""},
-  {"id":"c34","name":"Freedom Ventures","priority":"?","scope":["Creative"],"notes":""},
-  {"id":"c35","name":"Pygio","priority":"-","scope":[],"notes":""},
-  {"id":"c36","name":"Auxo Digital","priority":"-","scope":[],"notes":""},
-  {"id":"c37","name":"RCS Ad Spend","priority":"-","scope":[],"notes":""},
-  {"id":"c38","name":"RCS Monthly Fee","priority":"-","scope":[],"notes":""},
-  {"id":"c39","name":"Fix Forward","priority":"-","scope":[],"notes":""},
-  {"id":"c40","name":"JH Group","priority":"x","scope":["Ad hoc"],"notes":""},
-  {"id":"c41","name":"Nucleus Vision Digital","priority":"-","scope":["Creative"],"notes":""},
-  {"id":"c42","name":"OpenExO Inc.","priority":"-","scope":[],"notes":""},
-  {"id":"c43","name":"One_Eleven","priority":"-","scope":[],"notes":""},
-  {"id":"c44","name":"GLA","priority":"-","scope":["Ad hoc"],"notes":""},
-  {"id":"c45","name":"Fullstack4o","priority":"-","scope":[],"notes":""},
-  {"id":"c46","name":"SolaVieive","priority":"-","scope":["Ad hoc"],"notes":""},
-  {"id":"c47","name":"The Dylan","priority":"?","scope":[],"notes":"Outstanding web build charge"},
-  {"id":"c48","name":"AI Advantage","priority":"-","scope":[],"notes":""},
-  {"id":"c49","name":"ctrl robotics","priority":"-","scope":[],"notes":""},
-  {"id":"c50","name":"Pragmattica","priority":"-","scope":[],"notes":""},
-  {"id":"c51","name":"Microglobals","priority":"-","scope":[],"notes":""},
-  {"id":"c52","name":"Downtown-2","priority":"x","scope":[],"notes":""},
-  {"id":"c53","name":"Kilmer & Cruise","priority":"x","scope":["Ad hoc"],"notes":""},
-  {"id":"c54","name":"gamechangers","priority":"x","scope":[],"notes":""},
-  {"id":"c55","name":"MoneyMag ai","priority":"x","scope":[],"notes":""},
-  {"id":"c56","name":"Neocles","priority":"x","scope":["Ad hoc"],"notes":""},
-  {"id":"c57","name":"powerforma","priority":"?","scope":[],"notes":"investigating status"},
-  {"id":"c58","name":"Water.org","priority":"x","scope":["Ad hoc"],"notes":""},
-  {"id":"c59","name":"Ecometric","priority":"x","scope":[],"notes":""}
-];
-
-const App = () => {
-  // 1. Initialize State from LocalStorage or Default
-  const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
-  });
-
-  const [selectedId, setSelectedId] = useState(() => clients[0]?.id);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [newServiceName, setNewServiceName] = useState('');
-  const [expandedTiers, setExpandedTiers] = useState(['P1', 'P2', 'P3', 'P4', 'x']);
-  const [lastSaved, setLastSaved] = useState(null);
-
-  // 2. Sync to LocalStorage on Change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
-    setLastSaved(new Date().toLocaleTimeString());
-  }, [clients]);
-
-  // Active client lookup with safety fallback
-  const activeClient = useMemo(() => {
-    const found = clients.find(c => c.id === selectedId);
-    return found || clients[0];
-  }, [clients, selectedId]);
-
-  // Derived tier data with safety fallback
-  const currentTier = useMemo(() => {
-    return TIER_MAP[activeClient?.priority] || DEFAULT_TIER;
-  }, [activeClient]);
-
-  // Filtering and Grouping
-  const filteredClients = useMemo(() => {
-    return clients.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [clients, searchTerm]);
-
-  const groupedClients = useMemo(() => {
-    return TIERS.map(tier => ({
-      ...tier,
-      items: filteredClients.filter(c => c.priority === tier.id)
-    }));
-  }, [filteredClients]);
-
-  // Actions
-  const updateClient = (id, updates) => {
-    setClients(prev => prev.map(c => 
-      c.id === id ? { ...c, ...updates, lastUpdated: new Date().toISOString() } : c
-    ));
-  };
-
-  const deleteClient = (id) => {
-    if (confirm("Delete this client record? This action will be saved.")) {
-      const remaining = clients.filter(c => c.id !== id);
-      setClients(remaining);
-      if (selectedId === id && remaining.length > 0) setSelectedId(remaining[0].id);
-    }
-  };
-
-  const addClient = () => {
-    const newId = `c${Date.now()}`;
-    const newC = { id: newId, name: 'New Client Record', priority: 'x', scope: [], notes: '', lastUpdated: new Date().toISOString() };
-    setClients([newC, ...clients]);
-    setSelectedId(newId);
-  };
-
-  const toggleService = (service) => {
-    const currentScope = activeClient.scope || [];
-    const updated = currentScope.includes(service) 
-      ? currentScope.filter(s => s !== service) 
-      : [...currentScope, service];
-    updateClient(activeClient.id, { scope: updated });
-  };
-
-  const handleAddService = (e) => {
-    e.preventDefault();
-    if (!newServiceName.trim()) return;
-    if (!activeClient.scope.includes(newServiceName)) {
-      updateClient(activeClient.id, { scope: [...activeClient.scope, newServiceName.trim()] });
-    }
-    setNewServiceName('');
-  };
-
-  const toggleTierCollapse = (tierId) => {
-    setExpandedTiers(prev => 
-      prev.includes(tierId) ? prev.filter(t => t !== tierId) : [...prev, tierId]
-    );
-  };
-
-  const resetToDefaults = () => {
-    if (confirm("Warning: This will overwrite all your current changes with the original spreadsheet data. Proceed?")) {
-      setClients(INITIAL_DATA);
-      setSelectedId(INITIAL_DATA[0].id);
-    }
-  };
-
-  return (
-    <div className="flex h-screen w-full bg-[#F5F7F9] font-sans text-slate-900 overflow-hidden">
-      
-      {/* SIDEBAR */}
-      <aside className="w-[340px] bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden shadow-sm">
-        {/* Header */}
-        <div className="p-6 bg-white border-b border-slate-100 sticky top-0 z-20">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
-              <Target className="text-blue-600" size={24} /> Portfolio
-            </h1>
-            <button 
-              onClick={addClient}
-              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-95"
-              title="Add Client"
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-          
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search 60+ accounts..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* List Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4">
-          {groupedClients.map(tier => (
-            <div key={tier.id} className="mb-2">
-              <button 
-                onClick={() => toggleTierCollapse(tier.id)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors group"
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-700">
-                    {tier.label} <span className="opacity-50 ml-1">({tier.items.length})</span>
-                  </span>
-                </div>
-                {expandedTiers.includes(tier.id) ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
-              </button>
-              
-              {expandedTiers.includes(tier.id) && (
-                <div className="space-y-1 mt-1 pl-1">
-                  {tier.items.map(client => (
-                    <button
-                      key={client.id}
-                      onClick={() => setSelectedId(client.id)}
-                      className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between group transition-all text-left ${selectedId === client.id ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-blue-50/50 text-slate-700'}`}
-                    >
-                      <div className="flex-1 min-w-0 pr-2">
-                        <p className={`text-sm font-bold truncate leading-tight ${selectedId === client.id ? 'text-white' : 'text-slate-800'}`}>
-                          {client.name}
-                        </p>
-                      </div>
-                      <ChevronRight size={14} className={`shrink-0 transition-transform ${selectedId === client.id ? 'text-white translate-x-1' : 'opacity-0 group-hover:opacity-100'}`} />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Sidebar Footer - Reset Control */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200">
-          <button 
-            onClick={resetToDefaults}
-            className="w-full flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors"
-          >
-            <RotateCcw size={12} /> Reset to Spreadsheet Defaults
-          </button>
-        </div>
-      </aside>
-
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto flex flex-col min-w-0 bg-[#F5F7F9]">
-        {activeClient ? (
-          <div className="w-full max-w-7xl mx-auto p-6 lg:p-10 space-y-8 animate-in fade-in duration-500">
-            
-            {/* Header Card */}
-            <header className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${currentTier.color}`}>
-                    {currentTier.label}
-                  </span>
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full uppercase tracking-wider">
-                    <Save size={12} className="text-emerald-500" /> Saved at {lastSaved}
-                  </div>
-                </div>
-                <input 
-                  type="text" 
-                  value={activeClient.name}
-                  onChange={(e) => updateClient(activeClient.id, { name: e.target.value })}
-                  className="text-4xl lg:text-5xl font-black text-slate-900 bg-transparent border-none focus:ring-0 w-full p-0 leading-tight outline-none"
-                  placeholder="Client Name"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0">
-                <select 
-                  value={activeClient.priority}
-                  onChange={(e) => updateClient(activeClient.id, { priority: e.target.value })}
-                  className="h-12 px-6 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-600 uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer shadow-sm"
-                >
-                  {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-                <button 
-                  onClick={() => deleteClient(activeClient.id)}
-                  className="h-12 w-12 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all border border-slate-100"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </header>
-
-            {/* Grid for Scope and Notes */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: Scope */}
-              <section className="lg:col-span-5 space-y-6">
-                <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                      <Briefcase className="text-blue-600" size={24} /> Scope of Work
-                    </h3>
-                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
-                      {activeClient.scope.length}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleAddService} className="relative mb-8 group">
-                    <input 
-                      type="text" 
-                      placeholder="Add service item..." 
-                      className="w-full pl-6 pr-14 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all outline-none"
-                      value={newServiceName}
-                      onChange={(e) => setNewServiceName(e.target.value)}
-                    />
-                    <button type="submit" className="absolute right-2 top-2 w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-blue-600 transition-all shadow-md">
-                      <Plus size={20} />
-                    </button>
-                  </form>
-
-                  <div className="space-y-2">
-                    {activeClient.scope.length > 0 ? (
-                      activeClient.scope.map((service, idx) => (
-                        <div 
-                          key={idx}
-                          className="flex items-center justify-between px-5 py-3.5 bg-slate-50/50 border border-slate-100 rounded-2xl group hover:bg-white hover:border-blue-100 hover:shadow-md transition-all duration-200"
-                        >
-                          <span className="text-sm font-bold text-slate-700 pr-4 leading-snug">{service}</span>
-                          <button 
-                            onClick={() => toggleService(service)}
-                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-16 text-center border-4 border-dashed border-slate-50 rounded-[2rem]">
-                        <AlertCircle className="mx-auto text-slate-200 mb-2" size={32} />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Scope is currently empty</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Visual Insight Card */}
-                <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2rem] p-8 text-white shadow-lg shadow-blue-200 overflow-hidden relative group">
-                  <div className="relative z-10">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-2">Service Density</h4>
-                    <p className="text-2xl font-black mb-4">Focus on Growth</p>
-                    <div className="flex items-center gap-4">
-                      <BarChart3 size={32} />
-                      <p className="text-sm font-medium opacity-90 leading-relaxed">
-                        Data is persistent. Changes made to {activeClient.name} are stored in your browser.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <Target size={160} />
-                  </div>
-                </div>
-              </section>
-
-              {/* Right Column: Notes */}
-              <section className="lg:col-span-7 h-full">
-                <div className="bg-white rounded-[2rem] p-8 lg:p-10 shadow-sm border border-slate-200 flex flex-col min-h-[600px] h-full">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-3">
-                      <StickyNote className="text-orange-500" size={24} /> Strategy & Notes
-                    </h3>
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase text-orange-400 tracking-widest bg-orange-50 px-3 py-1 rounded-full">
-                      <CheckCircle2 size={12} /> Auto-Saving enabled
-                    </div>
-                  </div>
-
-                  <textarea 
-                    value={activeClient.notes}
-                    onChange={(e) => updateClient(activeClient.id, { notes: e.target.value })}
-                    placeholder="List proactive growth opportunities, brand goals, or follow-ups for this client..."
-                    className="flex-1 w-full p-8 bg-orange-50/10 border border-orange-100 rounded-3xl text-slate-700 text-base font-medium leading-relaxed outline-none focus:ring-4 focus:ring-orange-500/5 transition-all resize-none shadow-inner scrollbar-hide"
-                  />
-                  
-                  <div className="mt-8 flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <AlertCircle size={14} className="text-blue-500" /> Reference ID: {activeClient.id}
-                    </div>
-                    <button className="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest flex items-center gap-1">
-                      Export Summary <ExternalLink size={12} />
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-6">
-            <Layout size={64} className="animate-pulse" />
-            <p className="text-sm font-black uppercase tracking-[0.3em]">Select a client from the portfolio</p>
-          </div>
-        )}
-      </main>
-
-      <style>{`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agency Client Map</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcfcfd; color: #0f172a; }
+        .tier-p1 { border-top: 6px solid #7c3aed; }
+        .tier-p2 { border-top: 6px solid #2563eb; }
+        .tier-p3 { border-top: 6px solid #0891b2; }
+        .tier-p4 { border-top: 6px solid #64748b; }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-      `}</style>
-    </div>
-  );
-};
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-export default App;
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, Fragment } = React;
+
+        // --- 1. CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAvxcoVE8ZpvG4OC5VKuNnfzuLxidL83U",
+            authDomain: "points-dashboard-78c0b.firebaseapp.com",
+            projectId: "points-dashboard-78c0b",
+            storageBucket: "points-dashboard-78c0b.firebasestorage.app",
+            messagingSenderId: "456742475224",
+            appId: "1:456742475224:web:7b73cf082db54daa488ead"
+        };
+
+        const APP_ID = "client-map-master-v1";
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // --- 2. ASSETS ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                Plus: <path d="M12 5v14M5 12h14" />,
+                Search: <g><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></g>,
+                Trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
+                Edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />,
+                Import: <g><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></g>,
+                X: <path d="M18 6 6 18M6 6l12 12" />,
+                Check: <polyline points="20 6 9 17 4 12" />,
+                Map: <g><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></g>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+
+        // --- 3. MAIN APP ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [clients, setClients] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [error, setError] = useState(null);
+            
+            const [showModal, setShowModal] = useState(false);
+            const [showImport, setShowImport] = useState(false);
+            const [editingClient, setEditingClient] = useState(null);
+            const [csvInput, setCsvInput] = useState("");
+
+            const [form, setForm] = useState({
+                name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: ""
+            });
+
+            useEffect(() => {
+                const unsub = auth.onAuthStateChanged(u => {
+                    if (u) setUser(u);
+                    else auth.signInAnonymously();
+                });
+                return () => unsub();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
+                
+                const unsub = ref.onSnapshot(snap => {
+                    setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    setLoading(false);
+                }, err => setError(err.message));
+                
+                return () => unsub();
+            }, [user]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
+                const data = { ...form, updatedAt: Date.now() };
+
+                if (editingClient) {
+                    await ref.doc(editingClient.id).update(data);
+                } else {
+                    await ref.add(data);
+                }
+                closeModal();
+            };
+
+            const closeModal = () => {
+                setForm({ name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: "" });
+                setEditingClient(null);
+                setShowModal(false);
+            };
+
+            const handleImport = async () => {
+                if (!csvInput.trim()) return;
+                
+                const rows = csvInput.split('\n').filter(r => r.trim() !== "");
+                // Looking at your specific CSV: Row 0 is "New table", Row 1 is Headers
+                // Data starts from index 2
+                const dataRows = rows.slice(2); 
+                const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
+                const batch = db.batch();
+
+                dataRows.forEach(row => {
+                    // Split by comma but respect basic quoted strings
+                    const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(p => p.trim().replace(/^"|"$/g, ''));
+                    
+                    // index 1 is "Customer", index 2 is "Active" (Tier)
+                    const name = parts[1];
+                    if (name && name !== "Customer") {
+                        const newDoc = ref.doc();
+                        batch.set(newDoc, {
+                            name: name,
+                            tier: parts[2] || "P4",
+                            social: parts[3] || "",
+                            ppc: parts[4] || "",
+                            creative: parts[5] || "",
+                            adhoc: parts[6] || "",
+                            proactive: parts[7] || "",
+                            updatedAt: Date.now()
+                        });
+                    }
+                });
+
+                await batch.commit();
+                setShowImport(false);
+                setCsvInput("");
+            };
+
+            const filteredClients = useMemo(() => {
+                return clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                              .sort((a, b) => a.tier.localeCompare(b.tier));
+            }, [clients, searchTerm]);
+
+            const getTierColor = (t) => {
+                const tier = t.toUpperCase();
+                if (tier.includes("P1")) return "text-purple-600 bg-purple-50";
+                if (tier.includes("P2")) return "text-blue-600 bg-blue-50";
+                if (tier.includes("P3")) return "text-cyan-600 bg-cyan-50";
+                return "text-slate-600 bg-slate-50";
+            };
+
+            if (loading) return (
+                <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
+                    <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Mapping Cloud Infrastructure</p>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col p-6 md:p-12 max-w-7xl mx-auto animate-in">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8">
+                        <div>
+                            <h1 className="text-4xl font-extrabold tracking-tighter text-slate-900 uppercase">Agency Client Map</h1>
+                            <div className="flex gap-4 mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                <span>{clients.length} Accounts Found</span>
+                                <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div> Live Data</span>
+                            </div>
+                        </div>
+                        <div className="flex w-full md:w-auto gap-4">
+                            <div className="flex-1 md:w-80 flex items-center bg-white px-4 rounded-2xl border shadow-sm">
+                                <Icon name="Search" className="text-slate-300 mr-2" />
+                                <input type="text" placeholder="Search accounts..." className="w-full py-4 text-sm font-semibold border-none focus:ring-0 bg-transparent" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                            </div>
+                            <button onClick={() => setShowImport(true)} className="p-4 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors" title="Import CSV">
+                                <Icon name="Import" size={20} />
+                            </button>
+                            <button onClick={() => setShowModal(true)} className="bg-indigo-600 text-white px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                                <Icon name="Plus" size={16} /> Add Client
+                            </button>
+                        </div>
+                    </header>
+
+                    {clients.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-200 animate-in">
+                            <div className="p-6 bg-slate-50 rounded-full mb-6">
+                                <Icon name="Map" size={48} className="text-slate-300" />
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-800 mb-2">Map is Empty</h2>
+                            <p className="text-slate-400 text-sm max-w-xs text-center mb-8">This is a fresh database. Import your CSV to see your accounts here.</p>
+                            <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg">
+                                <Icon name="Import" size={16} /> Paste CSV Data
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {filteredClients.map(client => (
+                                <div key={client.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col relative transition-all hover:shadow-2xl hover:-translate-y-1 group tier-${client.tier.toLowerCase().substring(0,2)}`}>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${getTierColor(client.tier)}`}>
+                                            {client.tier}
+                                        </span>
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => { setEditingClient(client); setForm(client); setShowModal(true); }} className="p-2 text-slate-300 hover:text-indigo-600"><Icon name="Edit" size={16}/></button>
+                                            <button onClick={() => db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).delete()} className="p-2 text-slate-300 hover:text-red-500"><Icon name="Trash" size={16}/></button>
+                                        </div>
+                                    </div>
+
+                                    <h3 className="text-2xl font-extrabold text-slate-900 mb-6 leading-tight">{client.name}</h3>
+
+                                    <div className="space-y-4 mb-8 flex-1">
+                                        {['social', 'ppc', 'creative', 'adhoc'].map(field => client[field] && (
+                                            <div key={field}>
+                                                <p className="text-[9px] font-black uppercase text-slate-400 mb-1 tracking-widest">{field}</p>
+                                                <p className="text-xs font-semibold text-slate-700 leading-relaxed whitespace-pre-wrap">{client[field]}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-auto pt-6 border-t border-slate-50">
+                                        <p className="text-[9px] font-black uppercase text-indigo-400 mb-2 tracking-widest flex items-center gap-2">
+                                            <Icon name="Check" size={10} /> Proactive Strategy
+                                        </p>
+                                        <p className="text-xs text-slate-500 italic leading-relaxed whitespace-pre-wrap">
+                                            {client.proactive || "No proactive goals set."}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ENTRY MODAL */}
+                    {showModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md">
+                            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in">
+                                <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
+                                    <h2 className="text-xl font-black uppercase tracking-tighter">{editingClient ? 'Update Account' : 'New Account Mapping'}</h2>
+                                    <button onClick={closeModal} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><Icon name="X" size={24} /></button>
+                                </div>
+                                <form onSubmit={handleSubmit} className="p-10 grid grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Client Name</label>
+                                        <input required type="text" className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                                    </div>
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Priority Tier</label>
+                                        <select className="w-full p-4 rounded-2xl bg-slate-50 border-none font-bold text-sm" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
+                                            <option>P1 - High Value (40K+)</option>
+                                            <option>P2 - Mid Tier (20-39K)</option>
+                                            <option>P3 - Growing (10-19K)</option>
+                                            <option>{"P4 - Lite (<10K)"}</option>
+                                        </select>
+                                    </div>
+                                    {['social', 'ppc', 'creative', 'adhoc'].map(field => (
+                                        <div key={field} className="col-span-2 md:col-span-1">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold capitalize">{field} Services</label>
+                                            <textarea rows={2} className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-xs font-semibold" value={form[field]} onChange={e => setForm({...form, [field]: e.target.value})} placeholder={`Add active ${field} details...`} />
+                                        </div>
+                                    ))}
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Proactive Strategy & Growth Notes</label>
+                                        <textarea rows={3} className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-xs font-semibold" value={form.proactive} onChange={e => setForm({...form, proactive: e.target.value})} placeholder="What are we doing to scale this client?" />
+                                    </div>
+                                    <button className="col-span-2 bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-indigo-600 transition-all mt-4">Save Account Record</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* IMPORT MODAL */}
+                    {showImport && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md">
+                            <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 animate-in">
+                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 leading-tight">Migrate CSV Data</h2>
+                                <p className="text-sm text-slate-500 mb-6 font-medium leading-relaxed">Open your <span className="font-bold">Client Map - Sheet1.csv</span> in a text editor (Notepad/TextEdit), copy all the text, and paste it below.</p>
+                                <textarea rows={8} className="w-full p-6 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-[10px] font-mono mb-6 custom-scrollbar leading-relaxed" placeholder="Paste CSV text here..." value={csvInput} onChange={e => setCsvInput(e.target.value)} />
+                                <div className="flex gap-4">
+                                    <button onClick={() => setShowImport(false)} className="flex-1 p-5 rounded-3xl border font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Cancel</button>
+                                    <button onClick={handleImport} className="flex-1 bg-indigo-600 text-white p-5 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Start Migration</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
