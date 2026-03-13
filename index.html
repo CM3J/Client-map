@@ -13,13 +13,13 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcfcfd; color: #0f172a; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #0f172a; }
         
-        .tier-p1 { border-left: 6px solid #7c3aed; }
-        .tier-p2 { border-left: 6px solid #2563eb; }
-        .tier-p3 { border-left: 6px solid #0891b2; }
-        .tier-p4 { border-left: 6px solid #64748b; }
-        .tier-x { border-left: 6px solid #e2e8f0; }
+        .tier-card-p1 { border-top: 5px solid #7c3aed; }
+        .tier-card-p2 { border-top: 5px solid #2563eb; }
+        .tier-card-p3 { border-top: 5px solid #0891b2; }
+        .tier-card-p4 { border-top: 5px solid #64748b; }
+        .tier-card-x { border-top: 5px solid #e2e8f0; }
         
         .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -44,35 +44,43 @@
         };
 
         const APP_ID = "client-map-master-v1";
-
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // FULL ROSTER FROM SPREADSHEET
-        const BASELINE_DATA = [
-            { name: "TBE Africa Pty (Ltd)", tier: "P2", social: "Social - 3 per week Ryan", ppc: "Meta, Google", creative: "Web design", adhoc: "", proactive: "LinkedIn opportunity? Follow-up on web design proposal." },
-            { name: "BikeMarket.co.za", tier: "P4", social: "", ppc: "", creative: "x", adhoc: "Kinda look at their website once in a while", proactive: "" },
-            { name: "Drone Ops (Pty) Ltd", tier: "P3", social: "", ppc: "Low level brand awareness", creative: "Ade hoc", adhoc: "", proactive: "Social as an opportunity" },
-            { name: "Bophelong Construction (Pty) Ltd", tier: "P4", social: "1 post a week dependant on share", ppc: "", creative: "SEO work", adhoc: "", proactive: "" },
-            { name: "Bushtec", tier: "P3", social: "", ppc: "Lead Gen, Safari, RCSSA", creative: "Ad hoc web work", adhoc: "Social media video", proactive: "" },
-            { name: "Fetola", tier: "P2", social: "", ppc: "Brand awareness", creative: "x", adhoc: "x", proactive: "" },
-            { name: "Molare Meats", tier: "P2", social: "1 a week", ppc: "Brand awareness", creative: "Label designs etc", adhoc: "", proactive: "" },
-            { name: "Superior Filtration", tier: "P3", social: "", ppc: "Retargetting campaign", creative: "SEO !!!!", adhoc: "", proactive: "" },
-            { name: "EBK", tier: "P2", social: "", ppc: "Meta and Tik Tok", creative: "Hosting", adhoc: "", proactive: "Track the goals we need to hit? GHL -" },
-            { name: "Thorndale Safari", tier: "x", social: "", ppc: "Google ads", creative: "", adhoc: "Web ad hoc", proactive: "" },
-            { name: "JH Group- Trennerys", tier: "P3", social: "", ppc: "x", creative: "", adhoc: "", proactive: "" },
-            { name: "CORNICE", tier: "x", social: "x", ppc: "Scaling Revenue month on month", creative: "x", adhoc: "New Shopify Site", proactive: "What is happening with the 3D Videos? Delight the Client." },
-            { name: "LODEC", tier: "x", social: "", ppc: "x", creative: "x", adhoc: "", proactive: "What is the status of the growth promised?" },
-            { name: "The Usual", tier: "P1", social: "x", ppc: "x", creative: "x", adhoc: "", proactive: "" },
-            { name: "Max Hotels", tier: "P1", social: "x", ppc: "x", creative: "x", adhoc: "", proactive: "" },
-            { name: "Cars2Cash", tier: "x", social: "x", ppc: "x", creative: "", adhoc: "", proactive: "" },
-            { name: "Welwaze", tier: "x", social: "x", ppc: "", creative: "x", adhoc: "", proactive: "" },
-            { name: "CBK", tier: "x", social: "x", ppc: "x", creative: "", adhoc: "", proactive: "" },
-            { name: "iFind Leaks", tier: "x", social: "", ppc: "x", creative: "", adhoc: "", proactive: "" },
-            { name: "Boss Leads LLC", tier: "x", social: "x", ppc: "x", creative: "x", adhoc: "", proactive: "" },
-            { name: "FEAC Engineering", tier: "x", social: "", ppc: "", creative: "x", adhoc: "", proactive: "" },
-            { name: "Helixiora", tier: "x", social: "", ppc: "x", creative: "x", adhoc: "", proactive: "" }
+        const TIERS = [
+            { id: "P1", label: "P1 - High Value", color: "bg-purple-600", light: "bg-purple-50", text: "text-purple-700" },
+            { id: "P2", label: "P2 - Mid Tier", color: "bg-blue-600", light: "bg-blue-50", text: "text-blue-700" },
+            { id: "P3", label: "P3 - Emerging", color: "bg-cyan-600", light: "bg-cyan-50", text: "text-cyan-700" },
+            { id: "P4", label: "P4 - Lite", color: "bg-slate-600", light: "bg-slate-50", text: "text-slate-700" },
+            { id: "x", label: "Unranked / Other", color: "bg-slate-300", light: "bg-slate-50", text: "text-slate-400" }
+        ];
+
+        const SERVICE_GROUPS = [
+            { 
+                id: 'social', 
+                label: 'Social Media', 
+                icon: 'Share',
+                options: ['Organic Posting', 'Community Management', 'Paid Social', 'Profile Audit', 'Influencer Marketing']
+            },
+            { 
+                id: 'ppc', 
+                label: 'Paid Search', 
+                icon: 'Cursor',
+                options: ['Google Ads', 'Meta Ads', 'TikTok Ads', 'LinkedIn Ads', 'Retargeting', 'Search Console']
+            },
+            { 
+                id: 'creative', 
+                label: 'Creative / Web', 
+                icon: 'Palette',
+                options: ['Web Design', 'Video Production', 'SEO Strategy', 'Brand Identity', 'Copywriting', 'E-mail Marketing']
+            },
+            { 
+                id: 'adhoc', 
+                label: 'Ad Hoc / Technical', 
+                icon: 'Zap',
+                options: ['Hosting', 'CRM Setup', 'Technical SEO', 'Consultation', 'Reporting']
+            }
         ];
 
         // --- 2. ASSETS ---
@@ -82,12 +90,13 @@
                 Search: <g><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></g>,
                 Trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
                 Edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />,
-                Import: <g><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></g>,
                 X: <path d="M18 6 6 18M6 6l12 12" />,
                 Check: <polyline points="20 6 9 17 4 12" />,
                 Users: <g><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></g>,
-                Rotate: <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />,
-                Alert: <g><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></g>
+                Share: <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />,
+                Cursor: <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3zM13 13l6 6" />,
+                Palette: <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />,
+                Zap: <path d="M13 2 L3 14 L12 14 L11 22 L21 10 L12 10 Z" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -102,46 +111,27 @@
             const [clients, setClients] = useState([]);
             const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState("");
-            const [error, setError] = useState(null);
-            
             const [showModal, setShowModal] = useState(false);
-            const [showImport, setShowImport] = useState(false);
             const [editingClient, setEditingClient] = useState(null);
-            const [csvInput, setCsvInput] = useState("");
 
             const [form, setForm] = useState({
-                name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: ""
+                name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: "",
+                selectedServices: [] // Array of strings like "social:Google Ads"
             });
 
-            // Initial Auth
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(u => {
                     if (u) setUser(u);
-                    else auth.signInAnonymously().catch(e => setError("Auth Error: " + e.message));
+                    else auth.signInAnonymously();
                 });
                 return () => unsub();
             }, []);
 
-            // Data Stream + Automatic Baseline Seeding
             useEffect(() => {
                 if (!user) return;
                 const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
-                
                 const unsub = ref.onSnapshot(async (snap) => {
-                    if (snap.empty) {
-                        // Automatically push baseline if empty
-                        const batch = db.batch();
-                        BASELINE_DATA.forEach(client => {
-                            const newDoc = ref.doc();
-                            batch.set(newDoc, { ...client, updatedAt: Date.now() });
-                        });
-                        await batch.commit();
-                    }
                     setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    setLoading(false);
-                }, err => {
-                    console.error(err);
-                    setError("Database error. Are Firestore Rules public? " + err.message);
                     setLoading(false);
                 });
                 return () => unsub();
@@ -157,182 +147,204 @@
             };
 
             const closeModal = () => {
-                setForm({ name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: "" });
+                setForm({ name: "", tier: "P2", social: "", ppc: "", creative: "", adhoc: "", proactive: "", selectedServices: [] });
                 setEditingClient(null);
                 setShowModal(false);
             };
 
-            const forceRestoreBaseline = async () => {
-                if (!confirm("This will overwrite existing data with the original baseline. Continue?")) return;
-                const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
-                
-                // Clear current
-                const snap = await ref.get();
-                const batch = db.batch();
-                snap.docs.forEach(doc => batch.delete(doc.ref));
-                
-                // Add baseline
-                BASELINE_DATA.forEach(client => {
-                    const newDoc = ref.doc();
-                    batch.set(newDoc, { ...client, updatedAt: Date.now() });
+            const toggleService = (groupId, option) => {
+                const serviceKey = `${groupId}:${option}`;
+                setForm(prev => {
+                    const current = prev.selectedServices || [];
+                    const next = current.includes(serviceKey)
+                        ? current.filter(s => s !== serviceKey)
+                        : [...current, serviceKey];
+                    return { ...prev, selectedServices: next };
                 });
-                
-                await batch.commit();
-                alert("Baseline Restored!");
             };
 
-            const filteredClients = useMemo(() => {
-                return clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                              .sort((a, b) => a.tier.localeCompare(b.tier));
+            const groupedClients = useMemo(() => {
+                const filtered = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                return TIERS.reduce((acc, tier) => {
+                    acc[tier.id] = filtered.filter(c => (c.tier || "x").includes(tier.id));
+                    return acc;
+                }, {});
             }, [clients, searchTerm]);
-
-            const getTierColor = (t) => {
-                const tier = (t || "x").toUpperCase();
-                if (tier.includes("P1")) return "text-purple-600 bg-purple-50";
-                if (tier.includes("P2")) return "text-blue-600 bg-blue-50";
-                if (tier.includes("P3")) return "text-cyan-600 bg-cyan-50";
-                if (tier.includes("P4")) return "text-slate-600 bg-slate-50";
-                return "text-slate-400 bg-slate-50";
-            };
 
             if (loading) return (
                 <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
                     <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">PULLING MASTER MAP...</p>
-                </div>
-            );
-
-            if (error) return (
-                <div className="h-screen flex items-center justify-center bg-red-50 p-6 text-center">
-                    <div className="max-w-md bg-white p-10 rounded-[3rem] shadow-xl border border-red-100">
-                        <Icon name="Alert" size={48} className="text-red-500 mx-auto mb-4" />
-                        <h2 className="text-xl font-black text-slate-900 mb-2 uppercase">Configuration Required</h2>
-                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">{error}</p>
-                        <button onClick={() => window.location.reload()} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg">Retry Connection</button>
-                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Mapping Portfolios</p>
                 </div>
             );
 
             return (
                 <div className="min-h-screen flex flex-col p-6 md:p-10 max-w-[1400px] mx-auto animate-in">
-                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-6">
                         <div className="flex items-center gap-4">
-                            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                            <div className="bg-slate-900 p-3 rounded-2xl text-white shadow-xl">
                                 <Icon name="Users" size={28} />
                             </div>
                             <div>
                                 <h1 className="text-3xl font-black tracking-tighter text-slate-900 uppercase leading-none">Client Map</h1>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2 mt-2">
-                                    <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> 
-                                    Baseline Active: {clients.length} Accounts
-                                </p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-2">Agency Service Dashboard</p>
                             </div>
                         </div>
                         
                         <div className="flex w-full md:w-auto gap-3">
-                            <div className="flex-1 md:w-80 flex items-center bg-white px-4 rounded-2xl border border-slate-200 shadow-sm focus-within:ring-2 ring-indigo-500/20 transition-all">
+                            <div className="flex-1 md:w-80 flex items-center bg-white px-4 rounded-2xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 ring-indigo-500/20">
                                 <Icon name="Search" className="text-slate-300 mr-2" />
-                                <input type="text" placeholder="Filter map..." className="w-full py-4 text-sm font-semibold border-none focus:ring-0 bg-transparent" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <input type="text" placeholder="Search account..." className="w-full py-4 text-sm font-semibold border-none focus:ring-0 bg-transparent" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                             </div>
-                            <button onClick={() => setShowImport(true)} className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm" title="Import Options">
-                                <Icon name="Import" size={20} className="text-slate-500" />
-                            </button>
-                            <button onClick={() => setShowModal(true)} className="bg-slate-900 text-white px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-indigo-600 transition-all flex items-center gap-2">
-                                <Icon name="Plus" size={16} /> Add Client
+                            <button onClick={() => setShowModal(true)} className="bg-indigo-600 text-white px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
+                                <Icon name="Plus" size={16} /> New Record
                             </button>
                         </div>
                     </header>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredClients.map(client => (
-                            <div key={client.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col relative transition-all hover:shadow-2xl group tier-${(client.tier || "x").toLowerCase().substring(0,2)}`}>
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${getTierColor(client.tier)}`}>
-                                        {client.tier}
+                    <div className="space-y-24">
+                        {TIERS.map(tier => groupedClients[tier.id]?.length > 0 && (
+                            <section key={tier.id} className="animate-in">
+                                <div className="flex items-center gap-4 mb-8">
+                                    <div className={`px-5 py-2 rounded-full ${tier.color} text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg`}>
+                                        {tier.label}
                                     </div>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setEditingClient(client); setForm(client); setShowModal(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"><Icon name="Edit" size={16}/></button>
-                                        <button onClick={() => db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).delete()} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Icon name="Trash" size={16}/></button>
-                                    </div>
+                                    <div className="h-px bg-slate-200 flex-1"></div>
+                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{groupedClients[tier.id].length} Managed</span>
                                 </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {groupedClients[tier.id].map(client => (
+                                        <div key={client.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col relative transition-all hover:shadow-2xl group tier-card-${tier.id.toLowerCase()}`}>
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="flex gap-1.5">
+                                                    {SERVICE_GROUPS.map(group => {
+                                                        const isActive = (client.selectedServices || []).some(s => s.startsWith(`${group.id}:`));
+                                                        return isActive ? (
+                                                            <div key={group.id} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl" title={group.label}>
+                                                                <Icon name={group.icon} size={14} />
+                                                            </div>
+                                                        ) : null;
+                                                    })}
+                                                </div>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => { setEditingClient(client); setForm(client); setShowModal(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"><Icon name="Edit" size={16}/></button>
+                                                    <button onClick={() => { if(confirm("Permanently delete?")) db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).delete(); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Icon name="Trash" size={16}/></button>
+                                                </div>
+                                            </div>
 
-                                <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight tracking-tight">{client.name}</h3>
+                                            <h3 className="text-2xl font-black text-slate-900 mb-6 leading-tight group-hover:text-indigo-600 transition-colors">{client.name}</h3>
 
-                                <div className="grid grid-cols-2 gap-x-6 gap-y-6 mb-8 flex-1">
-                                    {['social', 'ppc', 'creative', 'adhoc'].map(field => (client[field] && client[field] !== 'x' && client[field] !== '') ? (
-                                        <div key={field}>
-                                            <p className="text-[9px] font-black uppercase text-slate-400 mb-1 tracking-widest leading-none">{field}</p>
-                                            <p className="text-[11px] font-bold text-slate-600 leading-relaxed line-clamp-3">{client[field]}</p>
+                                            <div className="space-y-6 flex-1 mb-8">
+                                                {SERVICE_GROUPS.map(group => {
+                                                    const selected = (client.selectedServices || []).filter(s => s.startsWith(`${group.id}:`)).map(s => s.split(':')[1]);
+                                                    if (selected.length === 0) return null;
+                                                    
+                                                    return (
+                                                        <div key={group.id} className="animate-in">
+                                                            <div className="flex items-center gap-2 mb-2 text-slate-400">
+                                                                <Icon name={group.icon} size={10} />
+                                                                <span className="text-[9px] font-black uppercase tracking-widest">{group.label}</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                                                {selected.map(s => (
+                                                                    <span key={s} className="px-2 py-0.5 bg-slate-50 border border-slate-100 rounded-md text-[9px] font-bold text-slate-600 uppercase">{s}</span>
+                                                                ))}
+                                                            </div>
+                                                            {client[group.id] && (
+                                                                <p className="text-[10px] text-slate-400 italic leading-snug pl-1">"{client[group.id]}"</p>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {client.proactive && (
+                                                <div className="mt-auto pt-6 border-t border-slate-50">
+                                                    <p className="text-[9px] font-black uppercase text-indigo-500 mb-2 tracking-widest flex items-center gap-2">
+                                                        <Icon name="Check" size={10} /> Strategic Note
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500 italic leading-relaxed line-clamp-2">
+                                                        {client.proactive}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
-                                    ) : null)}
+                                    ))}
                                 </div>
-
-                                <div className="mt-auto pt-6 border-t border-slate-50">
-                                    <p className="text-[9px] font-black uppercase text-indigo-500 mb-2 tracking-widest flex items-center gap-2">
-                                        <Icon name="Check" size={10} /> Proactive Strategy
-                                    </p>
-                                    <p className="text-xs text-slate-500 italic leading-relaxed bg-slate-50 p-4 rounded-2xl">
-                                        {client.proactive || "No strategic initiatives recorded."}
-                                    </p>
-                                </div>
-                            </div>
+                            </section>
                         ))}
                     </div>
 
                     {/* ENTRY MODAL */}
                     {showModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md">
-                            <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in border border-white/20">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-md">
+                            <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in border border-white/20">
                                 <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
-                                    <h2 className="text-xl font-black uppercase tracking-tighter">{editingClient ? 'Update Account' : 'New Account'}</h2>
+                                    <h2 className="text-xl font-black uppercase tracking-tighter">{editingClient ? 'Edit Client Record' : 'Create Client Record'}</h2>
                                     <button onClick={closeModal} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><Icon name="X" size={24} /></button>
                                 </div>
-                                <form onSubmit={handleSubmit} className="p-10 grid grid-cols-2 gap-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                                    <div className="col-span-2 md:col-span-1">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Customer Name</label>
-                                        <input required type="text" className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                                    </div>
-                                    <div className="col-span-2 md:col-span-1">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Active Tier</label>
-                                        <select className="w-full p-4 rounded-2xl bg-slate-50 border-none font-bold text-sm" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
-                                            <option>P1</option>
-                                            <option>P2</option>
-                                            <option>P3</option>
-                                            <option>P4</option>
-                                            <option>{"x (Unranked)"}</option>
-                                            <option>Inactive</option>
-                                        </select>
-                                    </div>
-                                    {['social', 'ppc', 'creative', 'adhoc'].map(field => (
-                                        <div key={field} className="col-span-2 md:col-span-1">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold capitalize">{field}</label>
-                                            <textarea rows={2} className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-xs font-semibold" value={form[field]} onChange={e => setForm({...form, [field]: e.target.value})} />
+                                <form onSubmit={handleSubmit} className="p-10 space-y-8 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-6">
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Client Name</label>
+                                                <input required type="text" className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Priority Tier</label>
+                                                <select className="w-full p-4 rounded-2xl bg-slate-50 border-none font-bold text-sm" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
+                                                    {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Proactive Strategy</label>
+                                                <textarea rows={4} className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold" value={form.proactive} onChange={e => setForm({...form, proactive: e.target.value})} placeholder="What are the scale opportunities?" />
+                                            </div>
                                         </div>
-                                    ))}
-                                    <div className="col-span-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest font-bold">Strategic Goals</label>
-                                        <textarea rows={3} className="w-full p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500 text-xs font-semibold" value={form.proactive} onChange={e => setForm({...form, proactive: e.target.value})} />
+
+                                        <div className="space-y-6">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 block tracking-widest">Service Inventory</label>
+                                            <div className="space-y-4">
+                                                {SERVICE_GROUPS.map(group => (
+                                                    <div key={group.id} className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                                        <div className="flex items-center gap-3 mb-4">
+                                                            <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600"><Icon name={group.icon} size={14} /></div>
+                                                            <span className="font-extrabold text-xs uppercase tracking-wider text-slate-700">{group.label}</span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2 mb-4">
+                                                            {group.options.map(opt => (
+                                                                <button 
+                                                                    key={opt}
+                                                                    type="button"
+                                                                    onClick={() => toggleService(group.id, opt)}
+                                                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${
+                                                                        (form.selectedServices || []).includes(`${group.id}:${opt}`)
+                                                                            ? 'bg-indigo-600 text-white shadow-md'
+                                                                            : 'bg-white text-slate-400 hover:text-slate-600'
+                                                                    }`}
+                                                                >
+                                                                    {opt}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <input 
+                                                            type="text" 
+                                                            className="w-full p-3 bg-white/50 border-none rounded-xl text-xs font-semibold focus:ring-0 placeholder:text-slate-300"
+                                                            placeholder={`Specific details for ${group.label}...`}
+                                                            value={form[group.id]}
+                                                            onChange={e => setForm({...form, [group.id]: e.target.value})}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <button className="col-span-2 bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-indigo-600 transition-all mt-4">Save Mapping</button>
+                                    
+                                    <button className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-indigo-600 transition-all">
+                                        Save Client Mapping
+                                    </button>
                                 </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* IMPORT / RESTORE MODAL */}
-                    {showImport && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-md">
-                            <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 animate-in text-center">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 leading-none">Database Tools</h2>
-                                
-                                <div className="bg-indigo-50/50 p-8 rounded-[2rem] border border-indigo-100 mb-8">
-                                    <div className="inline-flex p-4 bg-indigo-600 text-white rounded-2xl mb-4"><Icon name="Rotate" size={24} /></div>
-                                    <h3 className="font-black uppercase text-xs tracking-widest mb-2">Sync Spreadsheet Baseline</h3>
-                                    <p className="text-xs text-slate-500 mb-6 leading-relaxed">Instantly load the 22 master accounts from your original CSV baseline file.</p>
-                                    <button onClick={forceRestoreBaseline} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">Restore Baseline Now</button>
-                                </div>
-
-                                <button onClick={() => setShowImport(false)} className="w-full p-5 rounded-3xl border border-slate-200 font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">Return to Map</button>
                             </div>
                         </div>
                     )}
