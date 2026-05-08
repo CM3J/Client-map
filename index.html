@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agency Client Map</title>
+    <title>Client Map</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -20,6 +20,7 @@
         .tier-card-p3 { border-top: 5px solid #0891b2; }
         .tier-card-p4 { border-top: 5px solid #64748b; }
         .tier-card-x { border-top: 5px solid #334155; }
+        .tier-card-archived { border-top: 5px solid #78716c; }
         
         .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -33,592 +34,80 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, Fragment } = React;
 
-        // --- 1. CONFIGURATION ---
+        // --- 1. FIREBASE INIT ---
         const firebaseConfig = {
-            apiKey: "AIzaSyAAvxcoVE8ZpvG4OC5VKuNnfzuLxidL83U",
-            authDomain: "points-dashboard-78c0b.firebaseapp.com",
-            projectId: "points-dashboard-78c0b",
-            storageBucket: "points-dashboard-78c0b.firebasestorage.app",
-            messagingSenderId: "456742475224",
-            appId: "1:456742475224:web:7b73cf082db54daa488ead"
+            apiKey: "AIzaSyDSIg23EW2mnGPLWnRLv3By0sbhLeTBQKQ",
+            authDomain: "artifacts-a4efd.firebaseapp.com",
+            projectId: "artifacts-a4efd",
+            storageBucket: "artifacts-a4efd.firebasestorage.app",
+            messagingSenderId: "152899ććć",
+            appId: "1:152899666247:web:1b9e97d5ea8f74c06ce18f"
         };
-
-        const APP_ID = "client-map-master-v1";
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const auth = firebase.auth();
 
-        // Exchange rate (you can make this dynamic if needed)
+        const APP_ID = "CLIENT_MAP_v4";
+        const SERVICE_OPTIONS = [
+            "Google PPC", "Meta PPC", "LinkedIn PPC", "Display", "SEO", 
+            "Social Media Mgmt", "Email Marketing", "CRO", "Creative Design", "Analytics & Reporting"
+        ];
+
         const EUR_TO_ZAR = 20.5;
 
-        const TIERS = [
-            { id: "P1", label: "P1 - High Value", color: "bg-purple-600", light: "bg-purple-900/30", text: "text-purple-400" },
-            { id: "P2", label: "P2 - Mid Tier", color: "bg-blue-600", light: "bg-blue-900/30", text: "text-blue-400" },
-            { id: "P3", label: "P3 - Emerging", color: "bg-cyan-600", light: "bg-cyan-900/30", text: "text-cyan-400" },
-            { id: "P4", label: "P4 - Lite", color: "bg-slate-600", light: "bg-slate-800/30", text: "text-slate-400" },
-            { id: "x", label: "Unranked / Other", color: "bg-slate-500", light: "bg-slate-800/30", text: "text-slate-500" }
-        ];
-
-        const AGENCIES = [
-            { id: "BV", label: "BV Agency", color: "bg-blue-500", text: "text-blue-400", light: "bg-blue-900/30" },
-            { id: "SA", label: "SA Agency", color: "bg-indigo-500", text: "text-indigo-400", light: "bg-indigo-900/30" }
-        ];
-
-        const DEFAULT_SERVICE_GROUPS = [
-            { id: 'ppc', label: 'Paid Search / PPC', icon: 'Cursor', options: ['Meta PPC', 'TikTok PPC', 'LinkedIn PPC', 'Google PPC', 'PPC Creative'] },
-            { id: 'creative', label: 'Creative & Content', icon: 'Palette', options: ['Graphic Design', 'Multimedia', 'Video Production', 'Content Strategy'] },
-            { id: 'web', label: 'Web & Search', icon: 'Zap', options: ['Website Hosting', 'Website Services', 'SEO', 'Web Design'] },
-            { id: 'social_tech', label: 'Social & Technical', icon: 'Share', options: ['Organic Social', 'CRM', 'Consultation'] }
-        ];
-
-        const BASELINE_DATA = [
-            { name: "TBE Africa Pty (Ltd)", tier: "P2", agency: "BV", social: "Social - 3 per week Ryan", ppc: "Meta, Google", creative: "Web design", proactive: "LinkedIn as an opportunity? Brand awareness. Follow-up on web design proposal.", monthlyHours: {}, serviceComments: {} },
-            { name: "BikeMarket.co.za", tier: "P4", agency: "BV", creative: "x", adhoc: "Kinda look at their website once in a while", monthlyHours: {}, serviceComments: {} },
-            { name: "Drone Ops (Pty) Ltd", tier: "P3", agency: "SA", ppc: "Low level brand awareness", creative: "Ade hoc", proactive: "Social as an opportunity", monthlyHours: {}, serviceComments: {} },
-            { name: "Bophelong Construction (Pty) Ltd", tier: "P4", agency: "BV", social: "1 post a week dependant on what they share", creative: "SEO work", monthlyHours: {}, serviceComments: {} },
-            { name: "Bushtec", tier: "P3", agency: "SA", ppc: "Lead Gen, Safari, RCSSA", creative: "Ad hoc web work", adhoc: "Social media video", monthlyHours: {}, serviceComments: {} },
-            { name: "Fetola", tier: "P2", agency: "BV", ppc: "Brand awareness", creative: "x", adhoc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Molare Meats", tier: "P2", agency: "SA", social: "1 a week", ppc: "Brand awareness", creative: "Label designs etc", monthlyHours: {}, serviceComments: {} },
-            { name: "Superior Filtration", tier: "P3", agency: "BV", ppc: "Retargetting campaign", creative: "SEO !!!!", monthlyHours: {}, serviceComments: {} },
-            { name: "EBK", tier: "P2", agency: "SA", ppc: "Meta and Tik Tok", creative: "Hosting", proactive: "Track the goals we need to hit? GHL -", monthlyHours: {}, serviceComments: {} },
-            { name: "Thorndale Safari", tier: "x", agency: "BV", ppc: "Google ads", adhoc: "Web ad hoc", monthlyHours: {}, serviceComments: {} },
-            { name: "JH Group- Trennerys", tier: "P3", agency: "SA", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "CORNICE", tier: "x", agency: "BV", social: "x", ppc: "Scaling Revenue month on month. Traffic increase - Foot traffic in store", creative: "x", adhoc: "New Shopify Site", proactive: "What is happening with the 3D Videos and New website? Delight the Client.", monthlyHours: {}, serviceComments: {} },
-            { name: "LODEC", tier: "x", agency: "SA", ppc: "x", creative: "x", proactive: "What is the status of the growth promised?", monthlyHours: {}, serviceComments: {} },
-            { name: "Radley Private School/Raizcorp", tier: "x", agency: "BV", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Pitch & Polish/Raizecorp", tier: "x", agency: "SA", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Arize/Raizcorp", tier: "x", agency: "BV", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Raizcorp Website Development", tier: "x", agency: "SA", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Downtown", tier: "x", agency: "BV", adhoc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Hotel Savoy", tier: "x", agency: "SA", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Cars2Cash", tier: "x", agency: "BV", social: "x", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Welwaze", tier: "x", agency: "SA", social: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "CBK", tier: "x", agency: "BV", social: "x", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "LK Jewellery", tier: "x", agency: "SA", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "iFind Leaks", tier: "x", agency: "BV", ppc: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Boss Leads LLC", tier: "x", agency: "SA", social: "x", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "FEAC Engineering", tier: "x", agency: "BV", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Helixiora", tier: "x", agency: "SA", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Bunk Hotels", tier: "x", agency: "BV", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "The Usual", tier: "P1", agency: "SA", social: "x", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "Max Hotels", tier: "P1", agency: "BV", social: "x", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} },
-            { name: "New Sapience", tier: "x", agency: "SA", social: "x", ppc: "x", creative: "x", monthlyHours: {}, serviceComments: {} }
-        ];
-
-        // Helper function to get current month key
-        const getCurrentMonthKey = () => {
-            const now = new Date();
-            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        };
-
-        // Helper function to format month key to readable format
-        const formatMonthKey = (key) => {
-            const [year, month] = key.split('-');
-            const date = new Date(year, parseInt(month) - 1);
-            return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        };
-
-        // Currency converter
-        const convertCurrency = (amount, fromCurrency, toCurrency) => {
-            if (!amount) return 0;
-            const numAmount = parseFloat(amount);
-            if (fromCurrency === toCurrency) return numAmount;
-            if (fromCurrency === 'ZAR' && toCurrency === 'EUR') return numAmount / EUR_TO_ZAR;
-            if (fromCurrency === 'EUR' && toCurrency === 'ZAR') return numAmount * EUR_TO_ZAR;
-            return numAmount;
-        };
-
-        const formatCurrency = (amount, currency) => {
-            const num = parseFloat(amount) || 0;
-            return currency === 'EUR' ? `€${num.toFixed(2)}` : `R${num.toFixed(2)}`;
-        };
-
-        // --- 2. ASSETS ---
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const icons = {
-                Plus: <path d="M12 5v14M5 12h14" />,
-                Search: <g><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></g>,
-                Trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
-                Edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />,
-                X: <path d="M18 6 6 18M6 6l12 12" />,
-                Check: <polyline points="20 6 9 17 4 12" />,
-                Users: <g><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></g>,
-                Share: <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />,
-                Cursor: <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3zM13 13l6 6" />,
-                Palette: <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />,
-                Zap: <path d="M13 2 L3 14 L12 14 L11 22 L21 10 L12 10 Z" />,
-                Settings: <g><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></g>,
-                Sparkles: <path d="m12 3 1.912 5.885L20 10.8l-5.885 1.912L12 18.6l-1.912-5.885L4.2 10.8l6.088-1.915L12 3Z" />,
-                Package: <path d="m7.5 4.27 9 5.15m-9 5.15 9-5.15m-9 5.15V21m9-11.58V21M3 8.35v8.3m0-8.3 9-5.15m-9 5.15 9 5.15m0-10.3 9 5.15m-9 5.15 9-5.15M21 8.35v8.3m0-8.3-9-5.15" />,
-                Building: <g><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="22"/><line x1="15" y1="22" x2="15" y2="22"/><line x1="12" y1="18" x2="12" y2="18"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="12" y1="10" x2="12" y2="10"/><line x1="12" y1="6" x2="12" y2="6"/><line x1="8" y1="18" x2="8" y2="18"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="8" y1="10" x2="8" y2="10"/><line x1="8" y1="6" x2="8" y2="6"/><line x1="16" y1="18" x2="16" y2="18"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="16" y1="10" x2="16" y2="10"/><line x1="16" y1="6" x2="16" y2="6"/></g>,
-                Clock: <g><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></g>,
-                Calendar: <g><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>,
-                MessageSquare: <g><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g>,
-                FileText: <g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></g>,
-                DollarSign: <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
-                RefreshCw: <g><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></g>
-            };
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {icons[name] || null}
-                </svg>
-            );
-        };
-
-        // --- 3. CLIENT CARD COMPONENT ---
-        function ClientCard({ client, serviceGroups, onEdit, onDelete, onOpenHours, onOpenServiceComments }) {
-            const [cardCurrency, setCardCurrency] = useState('ZAR');
-
-            const getCurrentMonthHours = () => {
-                const currentMonth = getCurrentMonthKey();
-                return client.monthlyHours?.[currentMonth] || 0;
-            };
-
-            const toggleCardCurrency = (e) => {
-                e.stopPropagation();
-                setCardCurrency(prev => prev === 'ZAR' ? 'EUR' : 'ZAR');
-            };
-
-            const displayAmount = (amount) => {
-                if (!amount) return formatCurrency(0, cardCurrency);
-                const clientBaseCurrency = client.baseCurrency || 'ZAR';
-                const converted = convertCurrency(amount, clientBaseCurrency, cardCurrency);
-                return formatCurrency(converted, cardCurrency);
-            };
-
-            return (
-                <div className={`bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-800 flex flex-col relative transition-all hover:shadow-2xl hover:border-slate-700 group tier-card-${(client.tier || 'x').toLowerCase()}`}>
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex flex-wrap gap-1.5 max-w-[70%]">
-                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${client.agency === 'SA' ? 'bg-indigo-900/50 text-indigo-400 border border-indigo-800/50' : 'bg-blue-900/50 text-blue-400 border border-blue-800/50'}`}>
-                                {client.agency || "BV"}
-                            </span>
-                            {Object.entries(client.services || {}).map(([key, status]) => (
-                                <button
-                                    key={key}
-                                    onClick={(e) => onOpenServiceComments(client, key, e)}
-                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-tighter transition-all cursor-pointer hover:scale-105 ${
-                                        status === 'well' ? 'bg-emerald-900/30 border-emerald-800/50 text-emerald-400 hover:bg-emerald-900/50' : 
-                                        status === 'caution' ? 'bg-amber-900/30 border-amber-800/50 text-amber-400 hover:bg-amber-900/50' :
-                                        'bg-red-900/30 border-red-800/50 text-red-400 hover:bg-red-900/50'
-                                    }`}
-                                    title={`Click to add comments for ${key}`}
-                                >
-                                    <div className={`w-1.5 h-1.5 rounded-full ${status === 'well' ? 'bg-emerald-500' : status === 'caution' ? 'bg-amber-500' : 'bg-red-500 animate-pulse'}`}></div>
-                                    {key}
-                                    {client.serviceComments?.[key] && (
-                                        <Icon name="MessageSquare" size={10} className="opacity-50" />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => onEdit(client)} className="p-2 text-slate-600 hover:text-indigo-400 transition-colors"><Icon name="Edit" size={16}/></button>
-                            <button onClick={() => onDelete(client)} className="p-2 text-slate-600 hover:text-red-400 transition-colors"><Icon name="Trash" size={16}/></button>
-                        </div>
-                    </div>
-
-                    <h3 className="text-2xl font-black text-slate-100 mb-4 leading-tight group-hover:text-indigo-400 transition-colors">{client.name}</h3>
-                    
-                    {/* HOURS TRACKING SECTION */}
-                    <button 
-                        onClick={() => onOpenHours(client)}
-                        className="w-full mb-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 hover:from-indigo-900/50 hover:to-purple-900/50 p-4 rounded-2xl border-2 border-indigo-800/50 hover:border-indigo-700/50 transition-all group/hours"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-indigo-600 p-2 rounded-xl group-hover/hours:scale-110 transition-transform">
-                                    <Icon name="Clock" size={16} className="text-white" />
-                                </div>
-                                <div className="text-left">
-                                    <p className="text-[8px] font-black uppercase text-indigo-400 tracking-widest">This Month</p>
-                                    <p className="text-xl font-black text-indigo-300">{getCurrentMonthHours()}h</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[7px] font-black uppercase text-slate-600 tracking-widest">View History</p>
-                                <p className="text-[9px] font-bold text-indigo-400">→</p>
-                            </div>
-                        </div>
-                    </button>
-
-                    {/* CURRENCY SECTION WITH TOGGLE */}
-                    {(client.retainerAmount || client.adSpend) && (
-                        <div className="mb-6 space-y-3">
-                            <div className="flex items-center justify-between mb-2">
-                                <p className="text-[7px] font-black uppercase text-slate-600 tracking-widest">Financial</p>
-                                <button
-                                    onClick={toggleCardCurrency}
-                                    className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-all group/curr"
-                                    title="Toggle Currency"
-                                >
-                                    <Icon name="RefreshCw" size={10} className="text-slate-500 group-hover/curr:text-indigo-400 transition-colors" />
-                                    <span className="text-[8px] font-black text-slate-400 group-hover/curr:text-indigo-400 transition-colors">{cardCurrency}</span>
-                                </button>
-                            </div>
-                            <div className="flex gap-3">
-                                {client.retainerAmount && (
-                                    <div className="flex-1 bg-slate-800/50 p-2.5 rounded-xl border border-slate-800">
-                                        <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Retainer</p>
-                                        <p className="text-[11px] font-extrabold text-slate-300">{displayAmount(client.retainerAmount)}</p>
-                                    </div>
-                                )}
-                                {client.adSpend && (
-                                    <div className="flex-1 bg-slate-800/50 p-2.5 rounded-xl border border-slate-800">
-                                        <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Ad Spend</p>
-                                        <p className="text-[11px] font-extrabold text-indigo-400">{displayAmount(client.adSpend)}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="space-y-4 flex-1 mb-8">
-                        {serviceGroups.map(group => client[group.id] && (
-                            <div key={group.id} className="p-4 bg-slate-800/30 rounded-2xl border border-slate-800/50">
-                                <p className="text-[9px] font-black uppercase text-slate-500 mb-1 tracking-widest flex items-center gap-1.5"><Icon name={group.icon} size={10} /> {group.label}</p>
-                                <p className="text-[11px] font-bold text-slate-400 leading-relaxed italic">{client[group.id]}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    {client.proactive && (
-                        <div className="mt-auto pt-6 border-t border-slate-800">
-                            <p className="text-[9px] font-black uppercase text-indigo-400 mb-2 tracking-widest flex items-center gap-2"><Icon name="Check" size={10} /> Proactive Strategy</p>
-                            <p className="text-[11px] text-slate-500 italic leading-relaxed">{client.proactive}</p>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // --- 4. SERVICE COMMENTS MODAL ---
-        function ServiceCommentsModal({ client, serviceName, onClose }) {
-            const [comments, setComments] = useState(client.serviceComments?.[serviceName] || '');
-            const [saving, setSaving] = useState(false);
-
-            const saveComments = async () => {
-                setSaving(true);
-                const updatedComments = { ...(client.serviceComments || {}), [serviceName]: comments };
-                await db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).update({
-                    serviceComments: updatedComments,
-                    updatedAt: Date.now()
-                });
-                setSaving(false);
-                alert('Comments saved successfully!');
-            };
-
-            const getStatusColor = () => {
-                const status = client.services?.[serviceName];
-                if (status === 'well') return 'from-emerald-900/40 to-emerald-800/40 border-emerald-700/50';
-                if (status === 'caution') return 'from-amber-900/40 to-amber-800/40 border-amber-700/50';
-                return 'from-red-900/40 to-red-800/40 border-red-700/50';
-            };
-
-            const getStatusBadge = () => {
-                const status = client.services?.[serviceName];
-                if (status === 'well') return { bg: 'bg-emerald-500', text: 'text-emerald-400', label: 'Running Well' };
-                if (status === 'caution') return { bg: 'bg-amber-500', text: 'text-amber-400', label: 'Needs Attention' };
-                return { bg: 'bg-red-500', text: 'text-red-400', label: 'At Risk' };
-            };
-
-            const statusBadge = getStatusBadge();
-
-            return (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-                    <div className="bg-slate-900 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in border border-slate-700">
-                        <div className={`p-8 border-b-2 bg-gradient-to-r ${getStatusColor()}`}>
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`${statusBadge.bg} p-3 rounded-2xl text-white shadow-lg`}>
-                                        <Icon name="MessageSquare" size={24} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-100">
-                                            {serviceName}
-                                        </h2>
-                                        <p className="text-sm font-bold text-slate-400 mt-1">{client.name}</p>
-                                    </div>
-                                </div>
-                                <button onClick={onClose} className="p-2 text-slate-500 hover:text-slate-200 transition-colors">
-                                    <Icon name="X" size={24} />
-                                </button>
-                            </div>
-                            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 border-2 ${statusBadge.bg === 'bg-emerald-500' ? 'border-emerald-600/50' : statusBadge.bg === 'bg-amber-500' ? 'border-amber-600/50' : 'border-red-600/50'} w-fit`}>
-                                <div className={`w-2 h-2 rounded-full ${statusBadge.bg} ${statusBadge.bg === 'bg-red-500' ? 'animate-pulse' : ''}`}></div>
-                                <span className={`text-xs font-black uppercase tracking-wider ${statusBadge.text}`}>
-                                    {statusBadge.label}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="p-8 space-y-6">
-                            <div>
-                                <label className="text-[10px] font-black uppercase text-slate-400 mb-3 block tracking-widest flex items-center gap-2">
-                                    <Icon name="FileText" size={14} />
-                                    Service Notes & Comments
-                                </label>
-                                <textarea
-                                    value={comments}
-                                    onChange={e => setComments(e.target.value)}
-                                    rows={12}
-                                    placeholder="Add notes about this service...
-- Campaign performance
-- Client feedback
-- Action items
-- Goals and KPIs
-- Issues to address"
-                                    className="w-full p-5 rounded-2xl bg-slate-800 border-2 border-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium leading-relaxed resize-none text-slate-200 placeholder-slate-500"
-                                />
-                                <p className="text-xs text-slate-500 mt-2 font-semibold">
-                                    {comments.length} characters • Last saved: {client.serviceComments?.[serviceName] ? 'Saved' : 'Never'}
-                                </p>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={saveComments}
-                                    disabled={saving}
-                                    className="flex-1 bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                >
-                                    {saving ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Icon name="Check" size={16} />
-                                            Save Comments
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={onClose}
-                                    className="px-8 bg-slate-800 text-slate-300 py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-700 transition-all"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // --- 5. HOURS TRACKING MODAL ---
-        function HoursModal({ client, onClose }) {
-            const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
-            const [hours, setHours] = useState('');
-            const [monthlyHours, setMonthlyHours] = useState(client.monthlyHours || {});
-
-            useEffect(() => {
-                setHours(monthlyHours[selectedMonth] || '');
-            }, [selectedMonth, monthlyHours]);
-
-            const saveHours = async () => {
-                const updatedHours = { ...monthlyHours, [selectedMonth]: parseFloat(hours) || 0 };
-                await db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).update({
-                    monthlyHours: updatedHours,
-                    updatedAt: Date.now()
-                });
-                setMonthlyHours(updatedHours);
-                alert('Hours saved successfully!');
-            };
-
-            const deleteMonth = async (monthKey) => {
-                if (!confirm(`Delete hours for ${formatMonthKey(monthKey)}?`)) return;
-                const updatedHours = { ...monthlyHours };
-                delete updatedHours[monthKey];
-                await db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).update({
-                    monthlyHours: updatedHours,
-                    updatedAt: Date.now()
-                });
-                setMonthlyHours(updatedHours);
-            };
-
-            const sortedMonths = Object.keys(monthlyHours).sort().reverse();
-            const totalHours = Object.values(monthlyHours).reduce((sum, h) => sum + (parseFloat(h) || 0), 0);
-
-            return (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-                    <div className="bg-slate-900 w-full max-w-3xl rounded-[3rem] shadow-2xl overflow-hidden animate-in border border-slate-700">
-                        <div className="p-8 border-b border-slate-700 flex justify-between items-center bg-gradient-to-r from-indigo-900/30 to-purple-900/30">
-                            <div>
-                                <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-100 flex items-center gap-3">
-                                    <Icon name="Clock" size={28} className="text-indigo-400" />
-                                    Hours Tracking
-                                </h2>
-                                <p className="text-sm font-bold text-slate-400 mt-1">{client.name}</p>
-                            </div>
-                            <button onClick={onClose} className="p-2 text-slate-500 hover:text-slate-200 transition-colors">
-                                <Icon name="X" size={24} />
-                            </button>
-                        </div>
-
-                        <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                            <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-6 rounded-3xl border border-indigo-800/50">
-                                <label className="text-[10px] font-black uppercase text-indigo-400 mb-3 block tracking-widest flex items-center gap-2">
-                                    <Icon name="Calendar" size={14} />
-                                    Select Month
-                                </label>
-                                <input 
-                                    type="month" 
-                                    value={selectedMonth}
-                                    onChange={e => setSelectedMonth(e.target.value)}
-                                    className="w-full p-4 rounded-2xl bg-slate-800 border-2 border-slate-700 focus:ring-2 focus:ring-indigo-500 font-bold text-sm mb-4 text-slate-200"
-                                />
-                                
-                                <label className="text-[10px] font-black uppercase text-indigo-400 mb-3 block tracking-widest">
-                                    Hours Worked
-                                </label>
-                                <div className="flex gap-3">
-                                    <input 
-                                        type="number" 
-                                        step="0.5"
-                                        value={hours}
-                                        onChange={e => setHours(e.target.value)}
-                                        placeholder="0.0"
-                                        className="flex-1 p-4 rounded-2xl bg-slate-800 border-2 border-slate-700 focus:ring-2 focus:ring-indigo-500 font-bold text-lg text-slate-200"
-                                    />
-                                    <button 
-                                        onClick={saveHours}
-                                        className="px-8 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
-                                    >
-                                        <Icon name="Check" size={16} />
-                                        Save
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">History</h3>
-                                    <div className="bg-slate-800 text-white px-4 py-2 rounded-xl border border-slate-700">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Total: </span>
-                                        <span className="text-lg font-black text-indigo-400">{totalHours.toFixed(1)}h</span>
-                                    </div>
-                                </div>
-                                
-                                {sortedMonths.length === 0 ? (
-                                    <div className="py-12 bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-700 text-center">
-                                        <Icon name="Clock" size={32} className="text-slate-600 mx-auto mb-3" />
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No hours logged yet</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {sortedMonths.map(monthKey => (
-                                            <div key={monthKey} className="flex items-center justify-between p-5 bg-slate-800 rounded-2xl border border-slate-700 hover:border-indigo-700/50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="bg-indigo-900/50 p-3 rounded-xl border border-indigo-800/50">
-                                                        <Icon name="Calendar" size={16} className="text-indigo-400" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-black text-sm text-slate-200">{formatMonthKey(monthKey)}</p>
-                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                                            {monthKey === getCurrentMonthKey() ? 'Current Month' : 'Past Record'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="text-right">
-                                                        <p className="text-2xl font-black text-indigo-400">{monthlyHours[monthKey]}</p>
-                                                        <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest">Hours</p>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => deleteMonth(monthKey)}
-                                                        className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                        <Icon name="Trash" size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="p-6 border-t border-slate-700 bg-slate-800/50">
-                            <button 
-                                onClick={onClose}
-                                className="w-full bg-slate-800 text-white py-5 rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-indigo-600 shadow-xl transition-all border border-slate-700"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // --- 6. MAIN APP ---
-        function App() {
-            const [user, setUser] = useState(null);
+        // --- 2. MAIN APP ---
+        function ClientMapApp() {
             const [clients, setClients] = useState([]);
-            const [serviceGroups, setServiceGroups] = useState(DEFAULT_SERVICE_GROUPS);
-            const [loading, setLoading] = useState(true);
-            const [searchTerm, setSearchTerm] = useState("");
-            
             const [showModal, setShowModal] = useState(false);
-            const [showSettings, setShowSettings] = useState(false);
             const [showHoursModal, setShowHoursModal] = useState(false);
             const [showServiceComments, setShowServiceComments] = useState(false);
+            const [editingClient, setEditingClient] = useState(null);
             const [selectedClient, setSelectedClient] = useState(null);
             const [selectedService, setSelectedService] = useState(null);
-            const [editingClient, setEditingClient] = useState(null);
-
-            const [form, setForm] = useState({
-                name: "", tier: "P2", agency: "BV", proactive: "", retainerAmount: "", adSpend: "",
-                services: {}, monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR"
+            const [form, setForm] = useState({ 
+                name: "", tier: "P2", agency: "BV", proactive: "", 
+                retainerPercent: "", adSpend: "", services: {}, 
+                monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR" 
             });
 
             useEffect(() => {
-                const unsub = auth.onAuthStateChanged(u => {
-                    if (u) setUser(u);
-                    else auth.signInAnonymously();
-                });
-                return () => unsub();
+                const unsubscribe = firebase.firestore()
+                    .collection('artifacts').doc(APP_ID)
+                    .collection('public').doc('data')
+                    .collection('clients')
+                    .onSnapshot(snap => {
+                        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setClients(data);
+                    });
+                return () => unsubscribe();
             }, []);
 
-            useEffect(() => {
-                if (!user) return;
-                const clientRef = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
-                const settingsRef = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services');
-
-                const unsubClients = clientRef.onSnapshot(async (snap) => {
-                    if (snap.empty) {
-                        const batch = db.batch();
-                        BASELINE_DATA.forEach(c => {
-                            const newDoc = clientRef.doc();
-                            batch.set(newDoc, { ...c, updatedAt: Date.now(), services: {}, monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR" });
-                        });
-                        await batch.commit();
-                    }
-                    setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    setLoading(false);
-                });
-
-                const unsubSettings = settingsRef.onSnapshot(doc => {
-                    if (doc.exists) setServiceGroups(doc.data().groups);
-                    else settingsRef.set({ groups: DEFAULT_SERVICE_GROUPS });
-                });
-
-                return () => { unsubClients(); unsubSettings(); };
-            }, [user]);
+            const tierOrder = { P1: 1, P2: 2, P3: 3, P4: 4, X: 5, Archived: 6 };
+            const sortedClients = useMemo(() => 
+                [...clients].sort((a, b) => tierOrder[a.tier] - tierOrder[b.tier]),
+            [clients]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
+                if (!form.name.trim()) return;
+                const db = firebase.firestore();
                 const ref = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
-                const data = { ...form, updatedAt: Date.now() };
+                const data = {
+                    ...form,
+                    retainerPercent: parseFloat(form.retainerPercent) || 0,
+                    adSpend: parseFloat(form.adSpend) || 0
+                };
                 if (editingClient) await ref.doc(editingClient.id).update(data);
                 else await ref.add(data);
                 closeModal();
             };
 
             const closeModal = () => {
-                setForm({ name: "", tier: "P2", agency: "BV", proactive: "", retainerAmount: "", adSpend: "", services: {}, monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR" });
-                setEditingClient(null); setShowModal(false);
+                setForm({ 
+                    name: "", tier: "P2", agency: "BV", proactive: "", 
+                    retainerPercent: "", adSpend: "", services: {}, 
+                    monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR" 
+                });
+                setEditingClient(null); 
+                setShowModal(false);
             };
 
             const cycleServiceStatus = (opt) => {
@@ -685,74 +174,107 @@
 
             const handleDelete = (client) => {
                 if (confirm("Permanently remove account?")) {
-                    db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients').doc(client.id).delete();
+                    firebase.firestore()
+                        .collection('artifacts').doc(APP_ID)
+                        .collection('public').doc('data')
+                        .collection('clients').doc(client.id).delete();
                 }
             };
 
-            const groupedClients = useMemo(() => {
-                const filtered = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
-                return TIERS.reduce((acc, tier) => {
-                    acc[tier.id] = filtered.filter(c => (c.tier || "x").includes(tier.id));
-                    return acc;
-                }, {});
-            }, [clients, searchTerm]);
+            const tierColors = {
+                P1: { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500" },
+                P2: { bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500" },
+                P3: { bg: "bg-cyan-500/10", text: "text-cyan-400", border: "border-cyan-500" },
+                P4: { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500" },
+                X: { bg: "bg-slate-700/10", text: "text-slate-500", border: "border-slate-700" },
+                Archived: { bg: "bg-stone-500/10", text: "text-stone-400", border: "border-stone-500" }
+            };
 
-            if (loading) return (
-                <div className="h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
-                    <div className="w-12 h-12 border-4 border-slate-800 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">Loading Agency Roster</p>
-                </div>
-            );
+            const tierLabels = {
+                P1: "Priority 1", P2: "Priority 2", P3: "Priority 3", 
+                P4: "Priority 4", X: "Churned", Archived: "Archived"
+            };
 
             return (
-                <div className="min-h-screen flex flex-col p-6 md:p-10 max-w-[1400px] mx-auto animate-in">
-                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-6">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl"><Icon name="Users" size={28} /></div>
+                <div className="min-h-screen p-8">
+                    {/* HEADER */}
+                    <div className="max-w-7xl mx-auto mb-8">
+                        <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-black tracking-tighter text-slate-100 uppercase leading-none">Account Map</h1>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-2">BV & SA Strategic Management</p>
+                                <h1 className="text-4xl font-bold text-slate-100 mb-2">Client Map</h1>
+                                <p className="text-slate-400">Active client accounts & service portfolio</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={cleanupDuplicates}
+                                    className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all text-sm font-medium"
+                                >
+                                    🧹 Cleanup Duplicates
+                                </button>
+                                <button 
+                                    onClick={() => setShowModal(true)}
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold shadow-lg shadow-blue-600/30"
+                                >
+                                    + Add Client
+                                </button>
                             </div>
                         </div>
-                        
-                        <div className="flex w-full md:w-auto gap-3">
-                            <div className="flex-1 md:w-80 flex items-center bg-slate-800 px-4 rounded-2xl border border-slate-700 shadow-sm focus-within:ring-2 ring-indigo-500/20">
-                                <Icon name="Search" className="text-slate-600 mr-2" />
-                                <input type="text" placeholder="Search customer name..." className="w-full py-4 text-sm font-semibold border-none focus:ring-0 bg-transparent text-slate-200 placeholder-slate-600" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                            </div>
-                            <button onClick={() => setShowSettings(true)} className="p-4 bg-slate-800 border border-slate-700 rounded-2xl hover:bg-slate-700 transition-all text-slate-400" title="Global Settings">
-                                <Icon name="Settings" size={20} />
-                            </button>
-                            <button onClick={() => setShowModal(true)} className="bg-indigo-600 text-white px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
-                                <Icon name="Plus" size={16} /> New Client
-                            </button>
-                        </div>
-                    </header>
-
-                    <div className="space-y-24">
-                        {TIERS.map(tier => groupedClients[tier.id]?.length > 0 && (
-                            <section key={tier.id} className="animate-in">
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className={`px-5 py-2 rounded-full ${tier.color} text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg`}>{tier.label}</div>
-                                    <div className="h-px bg-slate-800 flex-1"></div>
-                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{groupedClients[tier.id].length} Accounts</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {groupedClients[tier.id].map(client => (
-                                        <ClientCard
-                                            key={client.id}
-                                            client={client}
-                                            serviceGroups={serviceGroups}
-                                            onEdit={handleEdit}
-                                            onDelete={handleDelete}
-                                            onOpenHours={openHoursModal}
-                                            onOpenServiceComments={openServiceComments}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        ))}
                     </div>
+
+                    {/* TIER SECTIONS */}
+                    <div className="max-w-7xl mx-auto space-y-8">
+                        {["P1", "P2", "P3", "P4", "X", "Archived"].map(tier => {
+                            const tierClients = sortedClients.filter(c => c.tier === tier);
+                            if (tierClients.length === 0) return null;
+
+                            return (
+                                <div key={tier} className="animate-in">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold ${tierColors[tier].bg} ${tierColors[tier].text} border ${tierColors[tier].border}`}>
+                                            {tierLabels[tier]} ({tierClients.length})
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {tierClients.map(client => (
+                                            <ClientCard 
+                                                key={client.id}
+                                                client={client}
+                                                onEdit={handleEdit}
+                                                onDelete={handleDelete}
+                                                onOpenHours={openHoursModal}
+                                                onOpenServiceComments={openServiceComments}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* ADD/EDIT MODAL */}
+                    {showModal && (
+                        <ClientFormModal
+                            form={form}
+                            setForm={setForm}
+                            onSubmit={handleSubmit}
+                            onClose={closeModal}
+                            isEditing={!!editingClient}
+                            cycleServiceStatus={cycleServiceStatus}
+                            removeServiceFromClient={removeServiceFromClient}
+                            addServiceToClient={addServiceToClient}
+                        />
+                    )}
+
+                    {/* HOURS MODAL */}
+                    {showHoursModal && selectedClient && (
+                        <HoursModal
+                            client={selectedClient}
+                            onClose={() => {
+                                setShowHoursModal(false);
+                                setSelectedClient(null);
+                            }}
+                        />
+                    )}
 
                     {/* SERVICE COMMENTS MODAL */}
                     {showServiceComments && selectedClient && selectedService && (
@@ -766,158 +288,118 @@
                             }}
                         />
                     )}
+                </div>
+            );
+        }
 
-                    {/* HOURS MODAL */}
-                    {showHoursModal && selectedClient && (
-                        <HoursModal 
-                            client={selectedClient}
-                            onClose={() => {
-                                setShowHoursModal(false);
-                                setSelectedClient(null);
-                            }}
-                        />
-                    )}
+        // --- 3. CLIENT CARD ---
+        function ClientCard({ client, onEdit, onDelete, onOpenHours, onOpenServiceComments }) {
+            const [displayCurrency, setDisplayCurrency] = useState(client.baseCurrency || "ZAR");
 
-                    {/* ENTRY MODAL */}
-                    {showModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-                            <div className="bg-slate-900 w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden animate-in border border-slate-700">
-                                <div className="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-                                    <h2 className="text-xl font-black uppercase tracking-tighter text-slate-100">{editingClient ? 'Client Profile' : 'New Mapping'}</h2>
-                                    <button onClick={closeModal} className="p-2 text-slate-500 hover:text-slate-200 transition-colors"><Icon name="X" size={24} /></button>
-                                </div>
-                                <form onSubmit={handleSubmit} className="p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[80vh] overflow-y-auto custom-scrollbar">
-                                    <div className="lg:col-span-4 space-y-6">
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Customer Name</label><input required type="text" className="w-full p-4 rounded-2xl bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 font-bold text-lg text-slate-200" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-                                        
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Agency</label>
-                                                <select className="w-full p-4 rounded-2xl bg-slate-800 border-none font-bold text-sm text-slate-200" value={form.agency} onChange={e => setForm({...form, agency: e.target.value})}>
-                                                    {AGENCIES.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Tier</label>
-                                                <select className="w-full p-4 rounded-2xl bg-slate-800 border-none font-bold text-sm text-slate-200" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
-                                                    {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
+            const convertAmount = (amount, fromCurrency) => {
+                if (!amount) return 0;
+                if (displayCurrency === fromCurrency) return amount;
+                if (fromCurrency === "EUR" && displayCurrency === "ZAR") return amount * EUR_TO_ZAR;
+                if (fromCurrency === "ZAR" && displayCurrency === "EUR") return amount / EUR_TO_ZAR;
+                return amount;
+            };
 
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Base Currency</label>
-                                            <select className="w-full p-4 rounded-2xl bg-slate-800 border-none font-bold text-sm text-slate-200" value={form.baseCurrency || 'ZAR'} onChange={e => setForm({...form, baseCurrency: e.target.value})}>
-                                                <option value="ZAR">ZAR (Rands)</option>
-                                                <option value="EUR">EUR (Euros)</option>
-                                            </select>
-                                        </div>
+            const retainerDisplay = convertAmount(client.retainerPercent || 0, client.baseCurrency || "ZAR");
+            const spendDisplay = convertAmount(client.adSpend || 0, client.baseCurrency || "ZAR");
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div><label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Retainer</label><input type="number" className="w-full p-4 rounded-2xl bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm text-slate-200" value={form.retainerAmount} onChange={e => setForm({...form, retainerAmount: e.target.value})} placeholder="0.00" /></div>
-                                            <div><label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Spend</label><input type="number" className="w-full p-4 rounded-2xl bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm text-slate-200" value={form.adSpend} onChange={e => setForm({...form, adSpend: e.target.value})} placeholder="0.00" /></div>
-                                        </div>
+            const serviceStatusColors = {
+                well: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+                caution: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+                risk: "bg-red-500/20 text-red-300 border-red-500/30"
+            };
 
-                                        <div><label className="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Strategic Goals</label><textarea rows={6} className="w-full p-4 rounded-2xl bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-200" value={form.proactive} onChange={e => setForm({...form, proactive: e.target.value})} placeholder="Strategic growth path..." /></div>
-                                    </div>
+            const currentMonth = new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
+            const currentHours = client.monthlyHours?.[currentMonth] || 0;
 
-                                    <div className="lg:col-span-8 space-y-8">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-500 block tracking-widest mb-4">Assigned Robot Inventory</label>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {Object.keys(form.services || {}).length === 0 ? (
-                                                    <div className="col-span-2 py-10 bg-slate-800/50 rounded-[2rem] border-2 border-dashed border-slate-700 text-center">
-                                                        <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">No services assigned. Add from catalog below.</p>
-                                                    </div>
-                                                ) : Object.entries(form.services).map(([name, status]) => (
-                                                    <div key={name} className={`flex items-center justify-between p-5 rounded-[2rem] border transition-all ${
-                                                        status === 'well' ? 'bg-emerald-900/30 border-emerald-800/50' : 
-                                                        status === 'caution' ? 'bg-amber-900/30 border-amber-800/50' : 'bg-red-900/30 border-red-800/50'
-                                                    }`}>
-                                                        <button type="button" onClick={() => cycleServiceStatus(name)} className="flex items-center gap-3 text-left">
-                                                            <div className={`w-3 h-3 rounded-full ${status === 'well' ? 'bg-emerald-500' : status === 'caution' ? 'bg-amber-500' : 'bg-red-500 animate-pulse'}`}></div>
-                                                            <div>
-                                                                <p className={`font-black text-xs uppercase tracking-tight leading-none mb-1 ${status === 'well' ? 'text-emerald-400' : status === 'caution' ? 'text-amber-400' : 'text-red-400'}`}>{name}</p>
-                                                                <p className={`text-[8px] font-black uppercase ${status === 'well' ? 'text-emerald-600' : status === 'caution' ? 'text-amber-600' : 'text-red-600'}`}>Status: {status}</p>
-                                                            </div>
-                                                        </button>
-                                                        <button type="button" onClick={() => removeServiceFromClient(name)} className="p-2 text-slate-600 hover:text-red-400"><Icon name="Trash" size={14} /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+            const toggleCurrency = () => {
+                setDisplayCurrency(prev => prev === "ZAR" ? "EUR" : "ZAR");
+            };
 
-                                        <div className="pt-8 border-t border-slate-800">
-                                            <label className="text-[10px] font-black uppercase text-slate-500 block tracking-widest mb-4 flex items-center gap-2"><Icon name="Package" size={14} /> Global Catalog Selection</label>
-                                            <div className="space-y-6">
-                                                {serviceGroups.map(group => (
-                                                    <div key={group.id} className="space-y-3">
-                                                        <p className="text-[9px] font-black uppercase text-slate-600 tracking-[0.2em]">{group.label}</p>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {group.options.map(opt => (
-                                                                <button 
-                                                                    key={opt} type="button" 
-                                                                    onClick={() => addServiceToClient(opt)}
-                                                                    disabled={form.services?.[opt]}
-                                                                    className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase transition-all ${
-                                                                        form.services?.[opt] ? 'bg-slate-800 text-slate-600 opacity-50 cursor-not-allowed border border-slate-700' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-indigo-500 hover:text-indigo-400'
-                                                                    }`}
-                                                                >
-                                                                    + {opt}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                        <input type="text" className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 ring-indigo-500/20 text-slate-200" placeholder={`Specific notes for ${group.label}...`} value={form[group.id] || ""} onChange={e => setForm({...form, [group.id]: e.target.value})} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button className="lg:col-span-12 w-full bg-indigo-600 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all mt-4">Save Mapping</button>
-                                </form>
+            return (
+                <div className={`tier-card-${client.tier.toLowerCase()} bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:shadow-xl hover:shadow-slate-900/50 transition-all group`}>
+                    {/* HEADER */}
+                    <div className="flex items-start justify-between mb-4">
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-100 mb-1">{client.name}</h3>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded">
+                                    {client.agency}
+                                </span>
+                                {client.proactive && (
+                                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded border border-blue-500/30">
+                                        {client.proactive}
+                                    </span>
+                                )}
                             </div>
                         </div>
-                    )}
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => onEdit(client)} className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                                <span className="text-slate-400">✏️</span>
+                            </button>
+                            <button onClick={() => onDelete(client)} className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                                <span className="text-red-400">🗑️</span>
+                            </button>
+                        </div>
+                    </div>
 
-                    {/* SETTINGS MODAL */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-                            <div className="bg-slate-900 w-full max-w-2xl rounded-[3rem] shadow-2xl p-10 animate-in text-center border border-slate-700">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 text-slate-100">System Management</h2>
-                                <div className="bg-indigo-900/30 p-6 rounded-3xl mb-8 flex items-center justify-between border border-indigo-800/50">
-                                    <div className="text-left"><p className="font-black text-indigo-300 text-sm uppercase">Deduplicate Data</p><p className="text-xs text-indigo-400/70">Cleanup duplicate client names in database.</p></div>
-                                    <button onClick={cleanupDuplicates} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg flex items-center gap-2 hover:bg-indigo-700"><Icon name="Sparkles" size={14} /> Run Cleanup</button>
-                                </div>
-                                <h3 className="text-left text-[10px] font-black uppercase text-slate-500 mb-4 tracking-widest">Global Master Catalog</h3>
-                                <div className="space-y-4 text-left max-h-[40vh] overflow-y-auto px-2 custom-scrollbar">
-                                    {serviceGroups.map((group, gIdx) => (
-                                        <div key={group.id} className="p-5 bg-slate-800/50 rounded-3xl space-y-4 border border-slate-800">
-                                            <div className="flex items-center gap-3"><Icon name={group.icon} className="text-indigo-400" size={16} /><span className="font-black text-sm uppercase tracking-tight text-slate-200">{group.label}</span></div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {group.options.map((opt, oIdx) => (
-                                                    <div key={opt} className="px-3 py-1 bg-slate-900 rounded-lg text-[10px] font-bold border border-slate-700 flex items-center gap-2 text-slate-300">
-                                                        {opt}
-                                                        <button onClick={() => {
-                                                            const newGroups = [...serviceGroups];
-                                                            newGroups[gIdx].options.splice(oIdx, 1);
-                                                            setServiceGroups(newGroups);
-                                                            db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services').set({ groups: newGroups });
-                                                        }} className="text-slate-600 hover:text-red-400"><Icon name="X" size={12} /></button>
-                                                    </div>
-                                                ))}
-                                                <button onClick={() => {
-                                                    const name = prompt("New Catalog Item:");
-                                                    if (!name) return;
-                                                    const newGroups = [...serviceGroups];
-                                                    newGroups[gIdx].options.push(name);
-                                                    setServiceGroups(newGroups);
-                                                    db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services').set({ groups: newGroups });
-                                                }} className="px-3 py-1 bg-indigo-900/30 text-indigo-400 rounded-lg text-[10px] font-black border border-indigo-800/50 hover:bg-indigo-900/50 uppercase tracking-widest">+ Add</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => setShowSettings(false)} className="mt-8 w-full bg-slate-800 text-white py-5 rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-indigo-600 shadow-xl transition-all border border-slate-700">Close Settings</button>
+                    {/* FINANCIALS */}
+                    <div className="grid grid-cols-2 gap-4 mb-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                        <div className="relative">
+                            <p className="text-xs text-slate-500 mb-1">Retainer % MRR</p>
+                            <p className="text-lg font-bold text-slate-100">
+                                {retainerDisplay > 0 ? `${retainerDisplay.toFixed(0)}%` : "—"}
+                            </p>
+                        </div>
+                        <div className="relative">
+                            <p className="text-xs text-slate-500 mb-1">Ad Spend</p>
+                            <p className="text-lg font-bold text-slate-100">
+                                {spendDisplay > 0 ? `${displayCurrency} ${spendDisplay.toLocaleString(undefined, {maximumFractionDigits: 0})}` : "—"}
+                            </p>
+                        </div>
+                        <div className="col-span-2 flex justify-center">
+                            <button
+                                onClick={toggleCurrency}
+                                className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+                            >
+                                💱 {displayCurrency}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* HOURS TRACKER */}
+                    <div 
+                        onClick={() => onOpenHours(client)}
+                        className="mb-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700 cursor-pointer hover:border-blue-500/50 transition-all"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-slate-500 mb-1">Hours This Month ({currentMonth})</p>
+                                <p className="text-2xl font-bold text-blue-400">{currentHours}h</p>
+                            </div>
+                            <span className="text-2xl">⏱️</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Click to view history & log hours</p>
+                    </div>
+
+                    {/* SERVICES */}
+                    {Object.keys(client.services || {}).length > 0 && (
+                        <div>
+                            <p className="text-xs text-slate-500 mb-2 font-semibold">Active Services</p>
+                            <div className="flex flex-wrap gap-2">
+                                {Object.entries(client.services).map(([service, status]) => (
+                                    <button
+                                        key={service}
+                                        onClick={(e) => onOpenServiceComments(client, service, e)}
+                                        className={`text-xs px-3 py-1.5 rounded-full border transition-all hover:scale-105 ${serviceStatusColors[status]}`}
+                                    >
+                                        {service}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -925,8 +407,333 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // --- 4. FORM MODAL ---
+        function ClientFormModal({ form, setForm, onSubmit, onClose, isEditing, cycleServiceStatus, removeServiceFromClient, addServiceToClient }) {
+            return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <h2 className="text-2xl font-bold text-slate-100 mb-6">
+                            {isEditing ? "Edit Client" : "Add New Client"}
+                        </h2>
+
+                        <form onSubmit={onSubmit} className="space-y-6">
+                            {/* BASIC INFO */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Client Name *</label>
+                                    <input
+                                        type="text"
+                                        value={form.name}
+                                        onChange={e => setForm({...form, name: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Tier</label>
+                                    <select
+                                        value={form.tier}
+                                        onChange={e => setForm({...form, tier: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    >
+                                        <option value="P1">Priority 1</option>
+                                        <option value="P2">Priority 2</option>
+                                        <option value="P3">Priority 3</option>
+                                        <option value="P4">Priority 4</option>
+                                        <option value="X">Churned</option>
+                                        <option value="Archived">Archived</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Agency</label>
+                                    <select
+                                        value={form.agency}
+                                        onChange={e => setForm({...form, agency: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    >
+                                        <option value="BV">BV</option>
+                                        <option value="DN">DN</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Proactive</label>
+                                    <input
+                                        type="text"
+                                        value={form.proactive}
+                                        onChange={e => setForm({...form, proactive: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                        placeholder="Optional"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* FINANCIALS */}
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Base Currency</label>
+                                    <select
+                                        value={form.baseCurrency}
+                                        onChange={e => setForm({...form, baseCurrency: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    >
+                                        <option value="ZAR">ZAR</option>
+                                        <option value="EUR">EUR</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Retainer % MRR</label>
+                                    <input
+                                        type="number"
+                                        value={form.retainerPercent}
+                                        onChange={e => setForm({...form, retainerPercent: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Ad Spend</label>
+                                    <input
+                                        type="number"
+                                        value={form.adSpend}
+                                        onChange={e => setForm({...form, adSpend: e.target.value})}
+                                        className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SERVICES */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Services</label>
+                                <div className="space-y-2">
+                                    {Object.entries(form.services || {}).map(([service, status]) => (
+                                        <div key={service} className="flex items-center gap-2 p-3 bg-slate-900 rounded-lg border border-slate-700">
+                                            <span className="flex-1 text-slate-100">{service}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => cycleServiceStatus(service)}
+                                                className={`px-3 py-1 rounded text-xs font-medium ${
+                                                    status === "well" ? "bg-emerald-500/20 text-emerald-300" :
+                                                    status === "caution" ? "bg-amber-500/20 text-amber-300" :
+                                                    "bg-red-500/20 text-red-300"
+                                                }`}
+                                            >
+                                                {status === "well" ? "✓ Well" : status === "caution" ? "⚠ Caution" : "⚠️ Risk"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeServiceFromClient(service)}
+                                                className="text-red-400 hover:text-red-300"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-3">
+                                    <p className="text-xs text-slate-500 mb-2">Add Services:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {SERVICE_OPTIONS.filter(opt => !form.services?.[opt]).map(opt => (
+                                            <button
+                                                key={opt}
+                                                type="button"
+                                                onClick={() => addServiceToClient(opt)}
+                                                className="text-xs px-3 py-1.5 bg-slate-700 text-slate-300 rounded-full hover:bg-slate-600 transition-colors"
+                                            >
+                                                + {opt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* BUTTONS */}
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold"
+                                >
+                                    {isEditing ? "Save Changes" : "Add Client"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all font-semibold"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 5. HOURS MODAL ---
+        function HoursModal({ client, onClose }) {
+            const [monthlyHours, setMonthlyHours] = useState(client.monthlyHours || {});
+            const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleString('default', { month: 'short', year: 'numeric' }));
+            const [hoursInput, setHoursInput] = useState("");
+
+            useEffect(() => {
+                setHoursInput(monthlyHours[selectedMonth] || "");
+            }, [selectedMonth, monthlyHours]);
+
+            const saveHours = async () => {
+                const updated = { ...monthlyHours, [selectedMonth]: parseFloat(hoursInput) || 0 };
+                await firebase.firestore()
+                    .collection('artifacts').doc(APP_ID)
+                    .collection('public').doc('data')
+                    .collection('clients').doc(client.id)
+                    .update({ monthlyHours: updated });
+                setMonthlyHours(updated);
+            };
+
+            const generateMonthOptions = () => {
+                const months = [];
+                const now = new Date();
+                for (let i = 0; i < 12; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    months.push(d.toLocaleString('default', { month: 'short', year: 'numeric' }));
+                }
+                return months;
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-2xl w-full">
+                        <h2 className="text-2xl font-bold text-slate-100 mb-6">
+                            Hours Tracker - {client.name}
+                        </h2>
+
+                        <div className="space-y-6">
+                            {/* CURRENT MONTH INPUT */}
+                            <div className="p-4 bg-slate-900 rounded-lg border border-slate-700">
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Select Month</label>
+                                <select
+                                    value={selectedMonth}
+                                    onChange={e => setSelectedMonth(e.target.value)}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none mb-4"
+                                >
+                                    {generateMonthOptions().map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Hours</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        value={hoursInput}
+                                        onChange={e => setHoursInput(e.target.value)}
+                                        className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                        placeholder="0"
+                                    />
+                                    <button
+                                        onClick={saveHours}
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* HISTORY */}
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-100 mb-3">History</h3>
+                                <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                                    {Object.entries(monthlyHours)
+                                        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+                                        .map(([month, hours]) => (
+                                            <div key={month} className="flex justify-between items-center p-3 bg-slate-900 rounded-lg border border-slate-700">
+                                                <span className="text-slate-300">{month}</span>
+                                                <span className="text-xl font-bold text-blue-400">{hours}h</span>
+                                            </div>
+                                        ))}
+                                    {Object.keys(monthlyHours).length === 0 && (
+                                        <p className="text-slate-500 text-center py-4">No hours logged yet</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all font-semibold"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 6. SERVICE COMMENTS MODAL ---
+        function ServiceCommentsModal({ client, serviceName, onClose }) {
+            const [comments, setComments] = useState(client.serviceComments?.[serviceName] || "");
+            const [isSaving, setIsSaving] = useState(false);
+
+            const saveComments = async () => {
+                setIsSaving(true);
+                const updated = { ...(client.serviceComments || {}), [serviceName]: comments };
+                await firebase.firestore()
+                    .collection('artifacts').doc(APP_ID)
+                    .collection('public').doc('data')
+                    .collection('clients').doc(client.id)
+                    .update({ serviceComments: updated });
+                setIsSaving(false);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-2xl w-full">
+                        <h2 className="text-2xl font-bold text-slate-100 mb-2">
+                            {serviceName}
+                        </h2>
+                        <p className="text-slate-400 mb-6">{client.name}</p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Notes & Comments</label>
+                                <textarea
+                                    value={comments}
+                                    onChange={e => setComments(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none resize-none"
+                                    rows="10"
+                                    placeholder="Add notes about this service for this client..."
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={saveComments}
+                                    disabled={isSaving}
+                                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold disabled:opacity-50"
+                                >
+                                    {isSaving ? "Saving..." : "Save Notes"}
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all font-semibold"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 7. RENDER ---
+        ReactDOM.render(<ClientMapApp />, document.getElementById('root'));
     </script>
 </body>
 </html>
