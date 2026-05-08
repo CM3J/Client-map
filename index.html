@@ -53,9 +53,14 @@
 
         const EUR_TO_ZAR = 20.5;
 
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
         // --- 2. MAIN APP ---
         function ClientMapApp() {
+            const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
+            const [loading, setLoading] = useState(true);
             const [showModal, setShowModal] = useState(false);
             const [showHoursModal, setShowHoursModal] = useState(false);
             const [showServiceComments, setShowServiceComments] = useState(false);
@@ -68,17 +73,27 @@
                 monthlyHours: {}, serviceComments: {}, baseCurrency: "ZAR" 
             });
 
+            // Authentication
             useEffect(() => {
-                const unsubscribe = firebase.firestore()
-                    .collection('artifacts').doc(APP_ID)
-                    .collection('public').doc('data')
-                    .collection('clients')
-                    .onSnapshot(snap => {
-                        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        setClients(data);
-                    });
-                return () => unsubscribe();
+                const unsub = auth.onAuthStateChanged(u => {
+                    if (u) setUser(u);
+                    else auth.signInAnonymously();
+                });
+                return () => unsub();
             }, []);
+
+            // Load clients after authentication
+            useEffect(() => {
+                if (!user) return;
+                const clientRef = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
+                
+                const unsubClients = clientRef.onSnapshot(snap => {
+                    setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    setLoading(false);
+                });
+
+                return () => unsubClients();
+            }, [user]);
 
             const tierOrder = { P1: 1, P2: 2, P3: 3, P4: 4, X: 5, Archived: 6 };
             const sortedClients = useMemo(() => 
@@ -194,6 +209,15 @@
                 P1: "Priority 1", P2: "Priority 2", P3: "Priority 3", 
                 P4: "Priority 4", X: "Churned", Archived: "Archived"
             };
+
+            if (loading) {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center gap-4">
+                        <div className="w-12 h-12 border-4 border-slate-800 border-t-blue-600 rounded-full animate-spin"></div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Loading Client Map</p>
+                    </div>
+                );
+            }
 
             return (
                 <div className="min-h-screen p-8">
