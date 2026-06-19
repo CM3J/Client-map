@@ -46,7 +46,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
         const APP_ID = "client-map-master-v1";
-        const SERVICE_OPTIONS = [
+        const DEFAULT_SERVICES = [
             "Google PPC", "Meta PPC", "LinkedIn PPC", "Display", "SEO", 
             "Social Media Mgmt", "Email Marketing", "CRO", "Creative Design", "Analytics & Reporting"
         ];
@@ -60,10 +60,13 @@
         function ClientMapApp() {
             const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
+            const [services, setServices] = useState(DEFAULT_SERVICES);
             const [loading, setLoading] = useState(true);
             const [showModal, setShowModal] = useState(false);
             const [showHoursModal, setShowHoursModal] = useState(false);
             const [showServiceComments, setShowServiceComments] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
+            const [newService, setNewService] = useState("");
             const [editingClient, setEditingClient] = useState(null);
             const [selectedClient, setSelectedClient] = useState(null);
             const [selectedService, setSelectedService] = useState(null);
@@ -82,18 +85,41 @@
                 return () => unsub();
             }, []);
 
-            // Load clients after authentication
+            // Load clients and services after authentication
             useEffect(() => {
                 if (!user) return;
                 const clientRef = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('clients');
+                const servicesRef = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services');
                 
                 const unsubClients = clientRef.onSnapshot(snap => {
                     setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     setLoading(false);
                 });
 
-                return () => unsubClients();
+                const unsubServices = servicesRef.onSnapshot(snap => {
+                    if (snap.exists && snap.data().list) {
+                        setServices(snap.data().list);
+                    } else {
+                        // Initialize with defaults if doesn't exist
+                        servicesRef.set({ list: DEFAULT_SERVICES });
+                    }
+                });
+
+                return () => { unsubClients(); unsubServices(); };
             }, [user]);
+
+            const addService = async () => {
+                if (!newService.trim()) return;
+                const updatedServices = [...services, newService];
+                await db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services').set({ list: updatedServices });
+                setNewService("");
+            };
+
+            const removeService = async (serviceName) => {
+                if (!confirm(`Remove "${serviceName}" from available services?`)) return;
+                const updatedServices = services.filter(s => s !== serviceName);
+                await db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection('settings').doc('services').set({ list: updatedServices });
+            };
 
             const tierOrder = { P1: 1, P2: 2, P3: 3, P4: 4, X: 5, Archived: 6 };
             const sortedClients = useMemo(() => 
@@ -230,6 +256,13 @@
                             </div>
                             <div className="flex gap-3">
                                 <button 
+                                    onClick={() => setShowSettings(true)}
+                                    className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all text-sm font-medium"
+                                    title="Manage Services"
+                                >
+                                    ⚙️ Services
+                                </button>
+                                <button 
                                     onClick={cleanupDuplicates}
                                     className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all text-sm font-medium"
                                 >
@@ -311,6 +344,65 @@
                                 setSelectedService(null);
                             }}
                         />
+                    )}
+
+                    {/* SETTINGS MODAL */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+                                <h2 className="text-2xl font-bold text-slate-100 mb-6">Manage Services</h2>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">Add New Service</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={newService}
+                                                onChange={e => setNewService(e.target.value)}
+                                                onKeyPress={e => e.key === 'Enter' && addService()}
+                                                className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                                placeholder="e.g., Shopify Management"
+                                            />
+                                            <button
+                                                onClick={addService}
+                                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-100 mb-3">Current Services ({services.length})</h3>
+                                        <div className="space-y-2 bg-slate-900 rounded-lg p-4">
+                                            {services.length === 0 ? (
+                                                <p className="text-slate-500 text-sm">No services yet. Add one above!</p>
+                                            ) : (
+                                                services.map((service, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600">
+                                                        <span className="text-slate-300">{service}</span>
+                                                        <button
+                                                            onClick={() => removeService(service)}
+                                                            className="text-red-400 hover:text-red-300 text-sm font-medium"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => setShowSettings(false)}
+                                    className="w-full mt-6 px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all font-semibold"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
@@ -561,7 +653,7 @@
                                 <div className="mt-3">
                                     <p className="text-xs text-slate-500 mb-2">Add Services:</p>
                                     <div className="flex flex-wrap gap-2">
-                                        {SERVICE_OPTIONS.filter(opt => !form.services?.[opt]).map(opt => (
+                                        {services.filter(opt => !form.services?.[opt]).map(opt => (
                                             <button
                                                 key={opt}
                                                 type="button"
