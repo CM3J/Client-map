@@ -53,6 +53,27 @@
 
         const EUR_TO_ZAR = 20.5;
 
+        // Local calendar date as YYYY-MM-DD (avoids UTC off-by-one for date inputs)
+        const todayISO = () => {
+            const d = new Date();
+            return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        };
+
+        const SEVERITY_LEVELS = ["Low", "Medium", "High", "Critical"];
+        const SEVERITY_STYLES = {
+            Low: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+            Medium: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+            High: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+            Critical: "bg-red-500/20 text-red-300 border-red-500/30"
+        };
+
+        // Format a YYYY-MM-DD string for display (local, no UTC shift)
+        const formatReportDate = (d) => {
+            if (!d) return "";
+            const parsed = new Date(d + "T00:00:00");
+            return isNaN(parsed) ? d : parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
         const db = firebase.firestore();
         const auth = firebase.auth();
 
@@ -66,6 +87,7 @@
             const [showModal, setShowModal] = useState(false);
             const [showHoursModal, setShowHoursModal] = useState(false);
             const [showServiceComments, setShowServiceComments] = useState(false);
+            const [showErrorReports, setShowErrorReports] = useState(false);
             const [showSettings, setShowSettings] = useState(false);
             const [newService, setNewService] = useState("");
             const [editingClient, setEditingClient] = useState(null);
@@ -135,7 +157,8 @@
                             c.agency,
                             c.proactive,
                             c.notes,
-                            ...Object.keys(c.services || {})
+                            ...Object.keys(c.services || {}),
+                            ...(c.errorReports || []).flatMap(r => [r.description, r.resolution])
                         ].filter(Boolean).join(" ").toLowerCase();
                         return haystack.includes(q);
                     })
@@ -222,6 +245,11 @@
                 setSelectedClient(client);
                 setSelectedService(serviceName);
                 setShowServiceComments(true);
+            };
+
+            const openErrorReports = (client) => {
+                setSelectedClient(client);
+                setShowErrorReports(true);
             };
 
             const handleEdit = (client) => {
@@ -338,6 +366,7 @@
                                                 onDelete={handleDelete}
                                                 onOpenHours={openHoursModal}
                                                 onOpenServiceComments={openServiceComments}
+                                                onOpenErrors={openErrorReports}
                                             />
                                         ))}
                                     </div>
@@ -400,6 +429,17 @@
                                 setShowServiceComments(false);
                                 setSelectedClient(null);
                                 setSelectedService(null);
+                            }}
+                        />
+                    )}
+
+                    {/* ERROR REPORTS MODAL */}
+                    {showErrorReports && selectedClient && (
+                        <ErrorReportsModal
+                            client={selectedClient}
+                            onClose={() => {
+                                setShowErrorReports(false);
+                                setSelectedClient(null);
                             }}
                         />
                     )}
@@ -467,7 +507,7 @@
         }
 
         // --- 3. CLIENT CARD ---
-        function ClientCard({ client, onEdit, onDelete, onOpenHours, onOpenServiceComments }) {
+        function ClientCard({ client, onEdit, onDelete, onOpenHours, onOpenServiceComments, onOpenErrors }) {
             const [displayCurrency, setDisplayCurrency] = useState(client.baseCurrency || "ZAR");
 
             const convertAmount = (amount, fromCurrency) => {
@@ -492,6 +532,9 @@
             const monthlyEntries = Object.entries(client.monthlyHours || {})
                 .filter(([, hours]) => hours)
                 .sort((a, b) => new Date(b[0]) - new Date(a[0]));
+
+            const errorReports = client.errorReports || [];
+            const openErrors = errorReports.filter(r => !r.resolution || !r.resolution.trim()).length;
 
             const toggleCurrency = () => {
                 setDisplayCurrency(prev => prev === "ZAR" ? "EUR" : "ZAR");
@@ -582,6 +625,25 @@
                         )}
 
                         <p className="text-xs text-slate-500 mt-2">Click to view history & log hours</p>
+                    </div>
+
+                    {/* ERROR LOG */}
+                    <div
+                        onClick={() => onOpenErrors(client)}
+                        className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700 cursor-pointer hover:border-blue-500/50 transition-all flex items-center justify-between"
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">🐞</span>
+                            <span className="text-xs font-semibold text-slate-400">Error Log</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {openErrors > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+                                    {openErrors} open
+                                </span>
+                            )}
+                            <span className="text-xs text-slate-500">{errorReports.length} logged</span>
+                        </div>
                     </div>
 
                     {/* SERVICES */}
@@ -962,7 +1024,291 @@
             );
         }
 
-        // --- 7. RENDER ---
+        // --- 7. ERROR REPORTS MODAL ---
+        function ErrorReportsModal({ client, onClose }) {
+            const [reports, setReports] = useState(client.errorReports || []);
+            const [isSaving, setIsSaving] = useState(false);
+            const [date, setDate] = useState(todayISO());
+            const [severity, setSeverity] = useState("Medium");
+            const [description, setDescription] = useState("");
+            const [handledBy, setHandledBy] = useState("");
+            const [resolution, setResolution] = useState("");
+
+            const persist = async (updated) => {
+                setIsSaving(true);
+                setReports(updated);
+                await firebase.firestore()
+                    .collection('artifacts').doc(APP_ID)
+                    .collection('public').doc('data')
+                    .collection('clients').doc(client.id)
+                    .update({ errorReports: updated });
+                setIsSaving(false);
+            };
+
+            const addReport = async () => {
+                if (!description.trim()) return;
+                const entry = {
+                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+                    date,
+                    severity,
+                    description: description.trim(),
+                    handledBy: handledBy.trim(),
+                    resolution: resolution.trim()
+                };
+                await persist([entry, ...reports]);
+                setDescription("");
+                setResolution("");
+                setHandledBy("");
+                setSeverity("Medium");
+                setDate(todayISO());
+            };
+
+            const updateResolution = async (id, value) => {
+                await persist(reports.map(r => r.id === id ? { ...r, resolution: value } : r));
+            };
+
+            const saveReport = async (id, patch) => {
+                await persist(reports.map(r => r.id === id ? { ...r, ...patch } : r));
+            };
+
+            const deleteReport = async (id) => {
+                if (!confirm("Delete this error report?")) return;
+                await persist(reports.filter(r => r.id !== id));
+            };
+
+            const sorted = [...reports].sort((a, b) => new Date(b.date) - new Date(a.date));
+            const openCount = reports.filter(r => !r.resolution || !r.resolution.trim()).length;
+
+            return (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex items-start justify-between mb-2">
+                            <h2 className="text-2xl font-bold text-slate-100">Error Log</h2>
+                            {openCount > 0 && (
+                                <span className="text-xs px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 font-medium">
+                                    {openCount} unresolved
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-slate-400 mb-6">{client.name}</p>
+
+                        {/* ADD NEW REPORT */}
+                        <div className="p-4 bg-slate-900 rounded-lg border border-slate-700 space-y-4 mb-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Date of error</label>
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={e => setDate(e.target.value)}
+                                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Severity</label>
+                                    <select
+                                        value={severity}
+                                        onChange={e => setSeverity(e.target.value)}
+                                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    >
+                                        {SEVERITY_LEVELS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">What occurred *</label>
+                                <textarea
+                                    value={description}
+                                    onChange={e => setDescription(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none resize-none"
+                                    rows="3"
+                                    placeholder="Describe the error…"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Handled by</label>
+                                <input
+                                    type="text"
+                                    value={handledBy}
+                                    onChange={e => setHandledBy(e.target.value)}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    placeholder="Who dealt with it (optional)"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">How it was resolved</label>
+                                <textarea
+                                    value={resolution}
+                                    onChange={e => setResolution(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-blue-500 focus:outline-none resize-none"
+                                    rows="2"
+                                    placeholder="Leave blank if not resolved yet"
+                                />
+                            </div>
+                            <button
+                                onClick={addReport}
+                                disabled={isSaving || !description.trim()}
+                                className="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold disabled:opacity-50"
+                            >
+                                {isSaving ? "Saving…" : "Add Report"}
+                            </button>
+                        </div>
+
+                        {/* HISTORY */}
+                        <h3 className="text-lg font-semibold text-slate-100 mb-3">History ({reports.length})</h3>
+                        <div className="space-y-3">
+                            {sorted.length === 0 && (
+                                <p className="text-slate-500 text-center py-4">No errors logged yet</p>
+                            )}
+                            {sorted.map(r => (
+                                <ErrorReportEntry
+                                    key={r.id}
+                                    report={r}
+                                    onSave={saveReport}
+                                    onDelete={deleteReport}
+                                    onQuickResolve={updateResolution}
+                                />
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={onClose}
+                            className="w-full mt-6 px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all font-semibold"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // A single error-log entry with view and edit modes
+        function ErrorReportEntry({ report, onSave, onDelete, onQuickResolve }) {
+            const [editing, setEditing] = useState(false);
+            const [date, setDate] = useState(report.date || todayISO());
+            const [severity, setSeverity] = useState(report.severity || "Medium");
+            const [description, setDescription] = useState(report.description || "");
+            const [handledBy, setHandledBy] = useState(report.handledBy || "");
+            const [resolution, setResolution] = useState(report.resolution || "");
+
+            const startEdit = () => {
+                setDate(report.date || todayISO());
+                setSeverity(report.severity || "Medium");
+                setDescription(report.description || "");
+                setHandledBy(report.handledBy || "");
+                setResolution(report.resolution || "");
+                setEditing(true);
+            };
+
+            const save = () => {
+                if (!description.trim()) return;
+                onSave(report.id, {
+                    date,
+                    severity,
+                    description: description.trim(),
+                    handledBy: handledBy.trim(),
+                    resolution: resolution.trim()
+                });
+                setEditing(false);
+            };
+
+            const resolved = report.resolution && report.resolution.trim();
+
+            if (editing) {
+                return (
+                    <div className="p-4 bg-slate-900 rounded-lg border border-blue-500/40 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
+                                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Severity</label>
+                                <select value={severity} onChange={e => setSeverity(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none">
+                                    {SEVERITY_LEVELS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">What occurred *</label>
+                            <textarea value={description} onChange={e => setDescription(e.target.value)} rows="3" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none resize-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Handled by</label>
+                            <input type="text" value={handledBy} onChange={e => setHandledBy(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Resolution</label>
+                            <textarea value={resolution} onChange={e => setResolution(e.target.value)} rows="2" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none resize-none" placeholder="Leave blank if unresolved" />
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={save} disabled={!description.trim()} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold disabled:opacity-50">Save</button>
+                            <button onClick={() => setEditing(false)} className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all text-sm font-semibold">Cancel</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="p-4 bg-slate-900 rounded-lg border border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-slate-400">{formatReportDate(report.date)}</span>
+                            {report.severity && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full border ${SEVERITY_STYLES[report.severity] || SEVERITY_STYLES.Low}`}>{report.severity}</span>
+                            )}
+                            <span className={`text-xs px-2 py-0.5 rounded-full border ${resolved ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}`}>{resolved ? "Resolved" : "Open"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button onClick={startEdit} className="text-slate-400 hover:text-slate-200 text-sm" title="Edit">✏️</button>
+                            <button onClick={() => onDelete(report.id)} className="text-red-400 hover:text-red-300 text-sm" title="Delete">✕</button>
+                        </div>
+                    </div>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap mb-3">{report.description}</p>
+                    {report.handledBy && report.handledBy.trim() && (
+                        <p className="text-xs text-slate-500 mb-3">Handled by <span className="text-slate-300">{report.handledBy}</span></p>
+                    )}
+                    {resolved ? (
+                        <div className="border-t border-slate-700 pt-2">
+                            <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Resolution</p>
+                            <p className="text-sm text-slate-400 whitespace-pre-wrap">{report.resolution}</p>
+                        </div>
+                    ) : (
+                        <div className="border-t border-slate-700 pt-2">
+                            <ResolutionEditor onSave={(val) => onQuickResolve(report.id, val)} />
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Inline editor to add a resolution to an open report
+        function ResolutionEditor({ onSave }) {
+            const [value, setValue] = useState("");
+            return (
+                <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Add resolution</p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={value}
+                            onChange={e => setValue(e.target.value)}
+                            onKeyPress={e => { if (e.key === 'Enter' && value.trim()) onSave(value.trim()); }}
+                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
+                            placeholder="How was it resolved?"
+                        />
+                        <button
+                            onClick={() => value.trim() && onSave(value.trim())}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold"
+                        >
+                            Resolve
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 8. RENDER ---
         ReactDOM.render(<ClientMapApp />, document.getElementById('root'));
     </script>
 </body>
