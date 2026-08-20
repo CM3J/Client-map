@@ -27,9 +27,29 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     </style>
+<style>
+  #cmshell-tabs{ position:sticky; top:0; z-index:40; display:flex; gap:6px; align-items:center;
+    padding:10px 16px; background:#0b1220; border-bottom:1px solid #1e293b; }
+  .cmshell-tab{ font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; font-size:14px;
+    padding:8px 18px; border-radius:8px; color:#94a3b8; background:transparent; border:none;
+    cursor:pointer; transition:background .15s,color .15s; }
+  .cmshell-tab:hover{ color:#e2e8f0; background:#1e293b; }
+  .cmshell-tab.active{ color:#fff; background:#2563eb; }
+  .cmshell-panel[hidden]{ display:none; }
+  #social-frame{ width:100%; border:0; display:block; background:#0f172a; height:calc(100vh - 57px); }
+</style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="cmshell-tabs">
+      <button class="cmshell-tab active" data-tab="clientmap">Client Map</button>
+      <button class="cmshell-tab" data-tab="social">Social Media</button>
+    </div>
+    <div id="tab-clientmap" class="cmshell-panel">
+      <div id="root"></div>
+    </div>
+    <div id="tab-social" class="cmshell-panel" hidden>
+      <iframe id="social-frame" title="Social Media Dashboard"></iframe>
+    </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, Fragment } = React;
@@ -1310,6 +1330,925 @@
 
         // --- 8. RENDER ---
         ReactDOM.render(<ClientMapApp />, document.getElementById('root'));
+    </script>
+
+    <script type="text/html" id="social-src"><!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js">@@SCRIPT_CLOSE@@
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js">@@SCRIPT_CLOSE@@
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js">@@SCRIPT_CLOSE@@
+<style>
+  :root{
+    --navy:#0b1220;
+    --navy-light:#1e293b;
+    --heading:#f1f5f9;
+    --slate:#94a3b8;
+    --gold:#2563eb;
+    --green:#10b981;
+    --amber:#f59e0b;
+    --red:#ef4444;
+    --blue:#3b82f6;
+    --teal:#06b6d4;
+    --gray-soft:#334155;
+    --bg:#0f172a;
+    --card:#1e293b;
+    --border:#334155;
+    --text:#f1f5f9;
+    --text-soft:#94a3b8;
+    --input-bg:#0f172a;
+    --focus-ring: rgba(37,99,235,0.35);
+    --font-display:'Plus Jakarta Sans', sans-serif;
+    --font-body:'Plus Jakarta Sans', sans-serif;
+    --font-mono:'Plus Jakarta Sans', sans-serif;
+  }
+  html[data-theme="dark"]{
+    --heading:#f1f5f9;
+    --slate:#94a3b8;
+    --gray-soft:#334155;
+    --bg:#0f172a;
+    --card:#1e293b;
+    --border:#334155;
+    --text:#f1f5f9;
+    --text-soft:#94a3b8;
+    --input-bg:#0f172a;
+  }
+  html{ transition:background .2s; }
+  body{ transition:background .2s, color .2s; }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--font-body);
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--gold); color:white; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:32px 24px 80px; }
+
+  /* ---------- header ---------- */
+  .topbar{ display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px; flex-wrap:wrap; gap:14px;}
+  .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.14em; color:var(--gold); font-weight:600; margin:0 0 4px; }
+  h1{ font-family:var(--font-display); font-size:32px; font-weight:700; margin:0; color:var(--heading); letter-spacing:-0.01em;}
+  .subline{ font-size:13px; color:var(--text-soft); margin-top:6px; }
+  .subline .sep{ color:var(--border); margin:0 2px; }
+  .save-indicator{ font-family:var(--font-mono); font-size:12px; color:var(--text-soft); display:inline-flex; align-items:center; gap:6px; }
+  .topbar-right{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .theme-toggle{
+    font-family:var(--font-body); font-size:12px; font-weight:600; padding:7px 13px; border-radius:999px;
+    border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; transition:all .15s;
+  }
+  .theme-toggle:hover{ border-color:var(--gold); }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--green); }
+  .dot.saving{ background:var(--amber); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  /* ---------- pulse ---------- */
+  .pulse{
+    display:grid; grid-template-columns:repeat(6,1fr); gap:1px;
+    background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px;
+  }
+  .tile{ background:var(--card); padding:18px 16px; }
+  .tile .tlabel{ font-family:var(--font-mono); font-size:10px; letter-spacing:0.08em; color:var(--text-soft); text-transform:uppercase; margin-bottom:8px; }
+  .tile .tval{ font-family:var(--font-display); font-size:28px; font-weight:700; color:var(--heading); }
+  .tile.accent-green{ box-shadow:inset 3px 0 0 var(--green); }
+  .tile.accent-teal{ box-shadow:inset 3px 0 0 var(--teal); }
+  .tile.accent-gold{ box-shadow:inset 3px 0 0 var(--gold); }
+  .tile.accent-red{ box-shadow:inset 3px 0 0 var(--red); }
+  .reminder{
+    background:var(--navy); color:#fff; border-radius:10px; padding:16px 18px; margin-bottom:28px;
+    font-size:13px;
+  }
+  .reminder-title{
+    font-family:var(--font-display); font-weight:600; font-size:15px; color:var(--gold); margin-bottom:6px;
+    letter-spacing:0.01em;
+  }
+
+  /* ---------- toolbar ---------- */
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  .filter-chips{ display:flex; gap:10px; flex-wrap:wrap; transition:opacity .15s; }
+  .filter-chips.chips-disabled{ opacity:0.35; pointer-events:none; }
+  .sort-divider{ width:1px; height:22px; background:var(--border); margin:0 2px; }
+  .drag-hint{
+    font-family:var(--font-mono); font-size:11.5px; color:var(--heading); background:var(--gray-soft);
+    border:1px dashed var(--border); border-radius:8px; padding:9px 14px; margin-bottom:14px;
+  }
+  .drag-handle{ cursor:grab; color:var(--text-soft); font-size:15px; padding:4px 6px; letter-spacing:-1px; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .drag-handle:active{ cursor:grabbing; }
+  .client.dragging{ opacity:0.4; }
+  .client.drag-over-top{ box-shadow:0 -3px 0 var(--gold); }
+  .client.drag-over-bottom{ box-shadow:0 3px 0 var(--gold); }
+  .search{
+    flex:1; min-width:180px; padding:9px 14px; border:1px solid var(--border); border-radius:8px;
+    font-family:var(--font-body); font-size:13px; background:var(--card); color:var(--text);
+  }
+  .search:focus{ outline:none; border-color:var(--gold); box-shadow:0 0 0 3px var(--focus-ring); }
+  .chip{
+    font-family:var(--font-mono); font-size:11px; padding:7px 12px; border-radius:999px; border:1px solid var(--border);
+    background:var(--card); cursor:pointer; color:var(--text-soft); white-space:nowrap; transition:all .15s;
+  }
+  .chip.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .btn-add{
+    font-family:var(--font-body); font-weight:600; font-size:13px; padding:9px 16px; border-radius:8px;
+    background:var(--gold); color:#fff; border:none; cursor:pointer; white-space:nowrap;
+  }
+  .btn-add:hover{ background:#9c7a49; }
+
+  /* ---------- client list (collapsed view — unchanged look) ---------- */
+  .client{
+    background:var(--card); border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .client.active-row{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); }
+  .client-head{
+    display:flex; align-items:center; gap:14px; padding:14px 18px; cursor:pointer; user-select:none;
+  }
+  .client-head:hover{ background:var(--gray-soft); }
+  .caret{ font-size:13px; color:var(--text-soft); width:10px; }
+  .cname{ font-family:var(--font-display); font-weight:600; font-size:16px; color:var(--heading); flex:1; min-width:120px; }
+  .badge{
+    font-family:var(--font-mono); font-size:10px; font-weight:600; letter-spacing:0.06em; padding:5px 10px;
+    border-radius:999px; color:#fff; text-transform:uppercase; white-space:nowrap;
+  }
+  .badge.st-active, .status-select.st-active{ background:var(--green); }
+  .badge.st-onboarding, .status-select.st-onboarding{ background:var(--blue); }
+  .badge.st-boosting, .status-select.st-boosting{ background:var(--teal); }
+  .badge.st-archive, .status-select.st-archive{ background:var(--slate); }
+  .badge.st-unset, .status-select.st-unset{ background:var(--text-soft); }
+
+  .gauge{ display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:11px; color:var(--text-soft); }
+  .gauge .pip{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .pip.ok{ background:var(--green); }
+  .pip.warn{ background:var(--amber); }
+  .pip.late{ background:var(--red); }
+  .pip.unknown{ background:#C9CDD4; }
+
+  .empty{ text-align:center; padding:60px 20px; color:var(--text-soft); }
+  .loading{ text-align:center; padding:80px; color:var(--text-soft); font-family:var(--font-mono); font-size:13px; }
+
+  /* ---------- archive ---------- */
+  .archive-wrap{ margin-top:26px; }
+  .archive-toggle{
+    display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px; font-weight:600;
+    color:var(--heading); background:var(--gray-soft); border:1px solid var(--border); border-radius:999px;
+    padding:9px 16px; cursor:pointer; user-select:none;
+  }
+  .archive-toggle:hover{ border-color:var(--gold); }
+  .archive-caret{ transition:transform .15s; font-size:10px; display:inline-block; }
+  .archive-wrap.open .archive-caret{ transform:rotate(90deg); }
+  .archive-panel{ display:none; margin-top:10px; }
+  .archive-wrap.open .archive-panel{ display:block; }
+  .archive-row{
+    display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border);
+    border-radius:8px; padding:10px 16px; margin-bottom:8px;
+  }
+  .archive-row .cname{ font-size:14px; }
+  .archive-actions{ display:flex; gap:8px; margin-left:auto; }
+  .archive-actions button{
+    font-family:var(--font-mono); font-size:11px; border-radius:6px; padding:6px 10px; cursor:pointer;
+    border:1px solid var(--border); background:none; color:var(--text);
+  }
+  .restore-btn{ color:var(--green); }
+  .restore-btn:hover{ border-color:var(--green); }
+  .delete-btn{ color:var(--red); }
+  .delete-btn:hover{ border-color:var(--red); }
+  .archive-empty{ color:var(--text-soft); font-size:12px; padding:10px 4px; }
+
+  /* ---------- slide-over client panel ---------- */
+  .panel-overlay{
+    position:fixed; inset:0; background:rgba(10,12,18,0.5); opacity:0; pointer-events:none;
+    transition:opacity .25s ease; z-index:60;
+  }
+  .panel-overlay.show{ opacity:1; pointer-events:auto; }
+  .client-panel{
+    position:fixed; top:0; right:0; height:100vh; width:560px; max-width:94vw;
+    background:var(--card); box-shadow:-16px 0 40px rgba(0,0,0,0.22);
+    transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+    z-index:61; overflow-y:auto;
+  }
+  .client-panel.show{ transform:translateX(0); }
+
+  .panel-header{
+    position:sticky; top:0; background:var(--card); padding:26px 26px 18px; border-bottom:1px solid var(--border);
+    z-index:2;
+  }
+  .panel-close{
+    position:absolute; top:18px; right:18px; width:30px; height:30px; border-radius:50%; border:1px solid var(--border);
+    background:var(--card); color:var(--text-soft); cursor:pointer; font-size:14px; line-height:1; display:flex;
+    align-items:center; justify-content:center; transition:all .15s;
+  }
+  .panel-close:hover{ border-color:var(--red); color:var(--red); }
+  .panel-title{
+    font-family:var(--font-display); font-weight:700; font-size:23px; color:var(--heading); border:none;
+    background:transparent; width:88%; padding:5px 6px; border-radius:7px; transition:background .15s, box-shadow .15s;
+  }
+  .panel-title:hover{ background:var(--gray-soft); }
+  .panel-title:focus{ outline:none; background:var(--gray-soft); box-shadow:0 0 0 3px var(--focus-ring); }
+  .panel-meta{ display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+  .status-select{
+    appearance:none; -webkit-appearance:none; -moz-appearance:none; border:none; border-radius:999px;
+    padding:6px 30px 6px 13px; font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.06em;
+    text-transform:uppercase; color:#fff; cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center;
+  }
+  .status-select:focus{ outline:none; box-shadow:0 0 0 3px var(--focus-ring); }
+
+  .panel-body{ padding:8px 26px 50px; }
+  .p-section{ margin-top:24px; }
+  .p-section:first-child{ margin-top:6px; }
+  .p-section-label{
+    display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.09em;
+    text-transform:uppercase; color:var(--gold); font-weight:600; margin-bottom:4px;
+  }
+  .sec-icon{ display:inline-flex; color:var(--gold); }
+  .sec-icon svg{ display:block; }
+
+  .prop-row{ display:flex; align-items:center; gap:14px; padding:9px 2px; border-bottom:1px solid var(--border); }
+  .prop-row:last-child{ border-bottom:none; }
+  .prop-label{ flex:0 0 40%; font-size:11.5px; color:var(--text-soft); font-weight:500; }
+  .prop-value{ flex:1; min-width:0; }
+  .prop-value.split{ display:flex; align-items:center; gap:6px; }
+  .prop-value.split .pv-input{ flex:1; min-width:0; }
+  .pv-divider{ color:var(--border); font-size:12px; flex-shrink:0; }
+
+  .pv-input, .pv-select{
+    width:100%; border:none; background:transparent; font-family:var(--font-body); font-size:13.5px;
+    color:var(--text); padding:6px 8px; border-radius:6px; transition:background .15s, box-shadow .15s;
+  }
+  .pv-select{ appearance:none; -webkit-appearance:none; cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 8px center; padding-right:24px;
+  }
+  .pv-input:hover, .pv-select:hover{ background:var(--gray-soft); }
+  .pv-input:focus, .pv-select:focus{ outline:none; background:var(--gray-soft); box-shadow:0 0 0 3px var(--focus-ring); }
+
+  .pv-textarea{
+    width:100%; border:1px solid transparent; background:transparent; font-family:var(--font-body); font-size:13.5px;
+    color:var(--text); padding:8px; border-radius:8px; min-height:70px; resize:vertical; transition:background .15s, box-shadow .15s;
+  }
+  .pv-textarea:hover{ background:var(--gray-soft); }
+  .pv-textarea:focus{ outline:none; background:var(--gray-soft); box-shadow:0 0 0 3px var(--focus-ring); }
+
+  .link-line{ margin-top:8px; }
+  .link-line a{ color:var(--blue); font-size:12px; text-decoration:none; }
+  .link-line a:hover{ text-decoration:underline; }
+
+  .row3-panel{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+
+  .errlog-item{
+    display:grid; grid-template-columns:112px 1fr 78px 24px; gap:8px; align-items:center; padding:6px 2px;
+    border-bottom:1px solid var(--border);
+  }
+  .errlog-item:last-of-type{ border-bottom:none; }
+  .errlog-item .pv-input, .errlog-item .pv-select{ font-size:12px; padding:5px 6px; }
+  .rm-btn{
+    background:none; border:none; color:var(--red); cursor:pointer; font-size:15px; line-height:1; padding:4px;
+    opacity:0.6; transition:opacity .15s;
+  }
+  .rm-btn:hover{ opacity:1; }
+  .small-btn{
+    font-family:var(--font-mono); font-size:11px; color:var(--heading); background:none; border:1px dashed var(--border);
+    border-radius:6px; padding:6px 10px; cursor:pointer; margin-top:8px;
+  }
+  .small-btn:hover{ border-color:var(--gold); }
+  .no-errors{ color:var(--text-soft); font-size:12px; padding:8px 2px; }
+
+  @media (max-width:720px){
+    .pulse{ grid-template-columns:repeat(2,1fr);}
+    .row3-panel{ grid-template-columns:1fr; }
+    .client-panel{ width:100vw; }
+    .prop-row{ flex-direction:column; align-items:flex-start; gap:4px; }
+    .prop-label{ flex:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="loading">Loading dashboard…</div>
+</div>
+
+<div class="panel-overlay" id="panel-overlay"></div>
+<div class="client-panel" id="client-panel"></div>
+
+<script>
+const STORAGE_KEY = 'client-dashboard-v1';
+const STATUS_OPTIONS = ['Active','Onboarding','Boosting Only','Archive'];
+const BOOST_OPTIONS = ['Yes','No','Not specified'];
+const LASTPASS_OPTIONS = ['Confirmed in LastPass','Not yet confirmed','N/A'];
+
+/* ===== Firebase (shared project with Client Map, separate collection) ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAAvxcoVE8ZpvG4OC5VKuNnfzuLxidL83U",
+  authDomain: "points-dashboard-78c0b.firebaseapp.com",
+  projectId: "points-dashboard-78c0b",
+  storageBucket: "points-dashboard-78c0b.firebasestorage.app",
+  messagingSenderId: "456742475224",
+  appId: "1:456742475224:web:7b73cf082db54daa488ead"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const fdb = firebase.firestore();
+const fauth = firebase.auth();
+const SOCIAL_DOC = fdb.collection('artifacts').doc('client-map-master-v1').collection('public').doc('data').collection('social').doc('state');
+
+const DEFAULT_CLIENTS = [
+  {id:'brainboss', name:'Brainboss', platforms:'Facebook, Instagram, LinkedIn', contact:'Karin, plus technical copy reviews with ad hoc team members depending on availability', calendarLink:'https://docs.google.com/presentation/d/1FVlJr8wDlnyjAaXzg4SXEk73ch9b8CMSTo66w9PIV_k/edit', finalPost:'2026-08-21', nextPost:'2026-08-24', cadence:'3x per week — static, with ad hoc carousels and 1 reel per month', status:'Active', postsWeek:3, postsMonth:12, boosted:'Yes', boostedNote:'Flag content that is worth boosting for client approval.', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Flag content that is worthy of boosting.', errorLog:[]},
+  {id:'bunk', name:'Bunk', platforms:'TikTok, YouTube (Shorts)', contact:'Amber — all approvals must go through Buffer, not the content calendar. Upload creative and caption; Amber adds the live date after approval.', calendarLink:'https://docs.google.com/presentation/d/12e_kiz0PcZ7uBTSOMg0DFpD_L13pAcq0x1Q3jGAMLFg/edit', finalPost:'', nextPost:'', cadence:'2x per week — reels only', status:'Active', postsWeek:2, postsMonth:8, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Approvals are slow with this client and consistently getting content live weekly is difficult. Delays between the final post going live and the next post being approved are expected — must be actively managed to keep the gap as small as possible. (Final post: N/A — pending approval on 6 recent reels)', errorLog:[]},
+  {id:'cornice-more', name:'Cornice & More (CAM/Blue)', platforms:'Facebook, Instagram, LinkedIn & Pinterest', contact:'Amanda & Etienne', calendarLink:'https://drive.google.com/drive/folders/1cj1eRA4M6z8600WVDsBjPqIcMtGgj2Mi', finalPost:'2026-08-31', nextPost:'2026-09-02', cadence:'1x static per week — directly linked to paid campaign promos', status:'Active', postsWeek:1, postsMonth:4, boosted:'Yes', boostedNote:'All Meta posts are boosted once live — same week, for 7 days (R20/day).', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'All Meta posts get boosted once they are live — same week for 7 days (R20/day).', errorLog:[]},
+  {id:'diginauts', name:'Diginauts', platforms:'Facebook, Instagram, LinkedIn', contact:'Ryan Bosma', calendarLink:'https://docs.google.com/presentation/d/1JCBgToiNI1sLhq4BX7G8DAdJY3eO0n03fw5HVPwJtxA/edit', finalPost:'', nextPost:'', cadence:'2x per week', status:'Active', postsWeek:2, postsMonth:8, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'', errorLog:[]},
+  {id:'harvey', name:'Harvey World Travel', platforms:'Facebook, Instagram, LinkedIn', contact:'Sohail', calendarLink:'https://docs.google.com/presentation/d/1OhbDt4KlAnV6VnS9zN1noqL7zF3EMvmvdFv2pKc7FUg/edit', finalPost:'', nextPost:'', cadence:'1x static per week', status:'Onboarding', postsWeek:1, postsMonth:4, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Launching August.', errorLog:[]},
+  {id:'maxhotel', name:'Maxhotel', platforms:'Facebook, Instagram, LinkedIn', contact:'Roxana', calendarLink:'https://docs.google.com/presentation/d/1TLoAYhOrZkM8KJZWli5E0Sx0dm5mP6PcJgl883dWmMQ/edit', finalPost:'2026-07-30', nextPost:'2026-08-19', cadence:'1x static per week', status:'Active', postsWeek:1, postsMonth:4, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Approvals can be slow. Prepare 6–8 posts at a time to keep scheduling consistent. Statics are sometimes converted into carousels or reels — Roxana likes variation on the grid.', errorLog:[]},
+  {id:'muoser', name:'Muoser', platforms:'Facebook, Instagram, LinkedIn', contact:'Sandra — client drops comments directly on the content calendar as part of the review process.', calendarLink:'https://docs.google.com/presentation/d/1U9MX0gjapb4yUMlKCE3fu-ncNlc7vcC62OgS3WkhVvg/edit', finalPost:'2026-08-25', nextPost:'2026-08-27', cadence:'3x per week — statics with 1 reel per month', status:'Active', postsWeek:3, postsMonth:12, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Client supplies the reel — add the logo sting to the intro. If no reel is supplied, prepare an additional static or carousel instead. Approved to source images directly from supplier websites; for strong supplier video, ask Sandra to request media from the supplier on our behalf.', errorLog:[]},
+  {id:'party', name:'Party A La Carte', platforms:'Instagram', contact:'Sona (Sunerah)', calendarLink:'https://docs.google.com/presentation/d/1d1BjkHvEgjI8YsD_lUb3c-g5Rt_IYbIbPETO_dQflvw/edit', finalPost:'', nextPost:'', cadence:'1x static per week', status:'Onboarding', postsWeek:1, postsMonth:4, boosted:'Yes', boostedNote:'Client wants content boosted monthly.', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Launching August. Wants to expand into TikTok soon. Wants to boost content monthly.', errorLog:[]},
+  {id:'tbe', name:'TBE (The Business Exchange)', platforms:'Facebook, Instagram, LinkedIn', contact:'Yegendhree', calendarLink:'https://docs.google.com/presentation/d/1NIYDVq4GIv0xdLlR6y1A-lY2H5bUwcjux5a6Vc4ikuc/edit', finalPost:'2026-08-31', nextPost:'2026-09-02', cadence:'3x per week — statics with ad hoc carousels and reels per month', status:'Active', postsWeek:3, postsMonth:12, boosted:'Not specified', boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Virtual tours to be produced and added as location reels. Professional photography of the space to be incorporated into static designs and converted into AI videos.', errorLog:[]},
+  {id:'tcm', name:'The Cornice Maker (TCM/Red)', platforms:'Facebook, Instagram, LinkedIn & Pinterest', contact:'Amanda & Etienne', calendarLink:'https://drive.google.com/drive/folders/14br-LGOGumTBC4EAm-q1IUdLjXH1MiyP', finalPost:'2026-08-31', nextPost:'2026-09-02', cadence:'1x static per week — directly linked to paid campaign promos', status:'Active', postsWeek:1, postsMonth:4, boosted:'Yes', boostedNote:'All Meta posts are boosted once live — same week, for 7 days (R20/day).', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'All Meta posts get boosted once they are live — same week for 7 days (R20/day).', errorLog:[]},
+  {id:'usual', name:'The Usual', platforms:'', contact:'', calendarLink:'', finalPost:'', nextPost:'', cadence:'', status:'Boosting Only', postsWeek:0, postsMonth:0, boosted:'Yes', boostedNote:'This account is boosting-only — we monitor channels and actively suggest boosts.', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Only boosting content. We need to monitor channels and actively suggest boosts.', errorLog:[]},
+  {id:'wild-africa', name:'Wild Africa Cream', platforms:'Instagram & Facebook', contact:'Lotte', calendarLink:'https://drive.google.com/drive/folders/10hIBcgsrOhaC7g4jVRkA19-qME1E1Bb6', finalPost:'', nextPost:'', cadence:'Entire process is managed by Downtown (external partner) — we schedule approved content only', status:'Boosting Only', postsWeek:3, postsMonth:12, boosted:'Yes', boostedNote:'All content is boosted the same week it goes live (IG: R610/5 days · FB: R640/5 days · IG Stories: R300/5 days).', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'', lastpass:'Not yet confirmed', lastpassNotes:'', notes:'Very ad hoc approvals and work process — everything is done by Downtown. We just schedule approved content.', errorLog:[]},
+];
+
+let state = { clients: [], filterStatus: 'at-risk', search: '', sortMode: 'alpha', order: [], theme: 'dark', archiveOpen: false, activeClientId: null };
+let saveTimer = null;
+
+async function loadData(){
+  try{
+    const snap = await SOCIAL_DOC.get();
+    if(snap.exists && snap.data() && Array.isArray(snap.data().clients)){
+      const parsed = snap.data();
+      state.clients = parsed.clients || [];
+      state.order = parsed.order || state.clients.map(c=>c.id);
+      state.sortMode = parsed.sortMode || 'alpha';
+      state.theme = parsed.theme || 'dark';
+    } else {
+      state.clients = DEFAULT_CLIENTS;
+      state.order = [...DEFAULT_CLIENTS].sort((a,b)=>a.name.localeCompare(b.name)).map(c=>c.id);
+      await persist();
+    }
+  } catch(e){
+    state.clients = DEFAULT_CLIENTS;
+    state.order = [...DEFAULT_CLIENTS].sort((a,b)=>a.name.localeCompare(b.name)).map(c=>c.id);
+    try{ await persist(); }catch(e2){ console.error(e2); }
+  }
+  document.documentElement.setAttribute('data-theme', state.theme);
+  syncOrder();
+  render();
+}
+
+function syncOrder(){
+  const ids = state.clients.map(c=>c.id);
+  state.order = state.order.filter(id => ids.includes(id));
+  ids.forEach(id => { if(!state.order.includes(id)) state.order.push(id); });
+}
+
+function scheduleSave(){
+  const indicator = document.getElementById('save-dot');
+  if(indicator) indicator.classList.add('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    await persist();
+    const ind = document.getElementById('save-dot');
+    if(ind) ind.classList.remove('saving');
+  }, 500);
+}
+
+async function persist(){
+  try{
+    await SOCIAL_DOC.set({clients: state.clients, order: state.order, sortMode: state.sortMode, theme: state.theme});
+  }catch(e){ console.error('Save failed', e); }
+}
+
+function uid(){ return 'c_' + Math.random().toString(36).slice(2,9); }
+
+function statusClass(status){
+  const s = (status||'').toLowerCase();
+  if(s.includes('active') && !s.includes('boost')) return 'st-active';
+  if(s.includes('onboard')) return 'st-onboarding';
+  if(s.includes('boost')) return 'st-boosting';
+  if(s.includes('archive')) return 'st-archive';
+  return 'st-unset';
+}
+
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d.getTime())) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+}
+
+function gaugeFor(client){
+  const days = daysUntil(client.nextPost);
+  if(days === null) return {cls:'unknown', text:'Unscheduled'};
+  if(days < 0) return {cls:'late', text: Math.abs(days)+'d overdue'};
+  if(days <= 7) return {cls:'late', text: days+'d — start now'};
+  if(days <= 14) return {cls:'warn', text: days+'d — coming up'};
+  return {cls:'ok', text: days+'d buffer'};
+}
+
+function fmtDate(d){
+  if(!d) return null;
+  const dt = new Date(d+'T00:00:00');
+  if(isNaN(dt.getTime())) return null;
+  return dt.toLocaleDateString('en-ZA', {year:'numeric', month:'short', day:'numeric'});
+}
+
+function computePulse(){
+  const clients = state.clients.filter(c => statusClass(c.status) !== 'st-archive');
+  const totalWeek = clients.reduce((s,c)=>s + (parseInt(c.postsWeek)||0), 0);
+  const totalMonth = clients.reduce((s,c)=>s + (parseInt(c.postsMonth)||0), 0);
+  let allErrors = [];
+  clients.forEach(c => (c.errorLog||[]).forEach(e => allErrors.push(e)));
+  const errorCount = allErrors.length;
+  let lastError = null;
+  allErrors.forEach(e=>{
+    if(e.date){
+      const d = new Date(e.date+'T00:00:00');
+      if(!isNaN(d) && (!lastError || d > lastError)) lastError = d;
+    }
+  });
+  let daysNoError = '—';
+  if(lastError){
+    const today = new Date(); today.setHours(0,0,0,0);
+    daysNoError = Math.max(0, Math.round((today - lastError)/86400000));
+  }
+  const atRisk = clients.filter(c=>{
+    const g = gaugeFor(c);
+    return g.cls === 'warn' || g.cls === 'late';
+  }).length;
+  return { totalWeek, totalMonth, clientCount: clients.length, errorCount, daysNoError, atRisk };
+}
+
+function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function icon(name){
+  const icons = {
+    details: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
+    scope: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="8" r="2.3"/><path d="M16.5 14.2c2.6.5 4.5 2.7 4.5 5.8"/></svg>',
+    security: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+    boosted: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4a2 2 0 0 0 2 2h1l3 5V3L6 8H5a2 2 0 0 0-2 2Z"/><path d="M16 8.5a4 4 0 0 1 0 7"/></svg>',
+    volume: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+    errors: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/></svg>',
+    notes: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6"/></svg>',
+  };
+  return `<span class="sec-icon">${icons[name]||''}</span>`;
+}
+
+/* ============================= MAIN RENDER ============================= */
+
+function render(){
+  const app = document.getElementById('app');
+  const p = computePulse();
+
+  const filtered = (state.sortMode === 'custom'
+    ? state.order.map(id => state.clients.find(c=>c.id===id)).filter(Boolean).filter(c => statusClass(c.status) !== 'st-archive')
+    : state.clients
+        .filter(c => statusClass(c.status) !== 'st-archive')
+        .filter(c => {
+          if(state.filterStatus === 'all') return true;
+          if(state.filterStatus === 'at-risk'){
+            const g = gaugeFor(c);
+            return g.cls === 'warn' || g.cls === 'late';
+          }
+          return statusClass(c.status)===state.filterStatus;
+        })
+        .filter(c => c.name.toLowerCase().includes(state.search.toLowerCase()))
+        .sort((a,b)=> {
+          if(state.filterStatus === 'at-risk'){
+            const da = daysUntil(a.nextPost);
+            const db = daysUntil(b.nextPost);
+            if(da === null && db === null) return a.name.localeCompare(b.name);
+            if(da === null) return 1;
+            if(db === null) return -1;
+            return da - db;
+          }
+          return a.name.localeCompare(b.name);
+        })
+  );
+  const archivedClients = state.clients.filter(c => statusClass(c.status) === 'st-archive').sort((a,b)=>a.name.localeCompare(b.name));
+
+  app.innerHTML = `
+    <div class="topbar">
+      <div>
+        <p class="eyebrow">ORGANIC SOCIAL OPERATIONS</p>
+        <h1>Client Dashboard</h1>
+        <p class="subline">Live <span class="sep">|</span> Editable <span class="sep">|</span> Autosaves to the cloud <span class="sep">|</span> <span class="save-indicator"><span class="dot" id="save-dot"></span> Synced</span></p>
+      </div>
+      <div class="topbar-right"></div>
+    </div>
+
+    <div class="pulse">
+      <div class="tile accent-green"><div class="tlabel">Posts This Week</div><div class="tval">${p.totalWeek}</div></div>
+      <div class="tile accent-teal"><div class="tlabel">Posts This Month</div><div class="tval">${p.totalMonth}</div></div>
+      <div class="tile accent-gold"><div class="tlabel">Clients Tracked</div><div class="tval">${p.clientCount}</div></div>
+      <div class="tile accent-red"><div class="tlabel">Priority (≤7d)</div><div class="tval">${p.atRisk}</div></div>
+      <div class="tile"><div class="tlabel">Errors Logged</div><div class="tval">${p.errorCount}</div></div>
+      <div class="tile"><div class="tlabel">Days w/o Error</div><div class="tval">${p.daysNoError}</div></div>
+    </div>
+
+    <div class="reminder">
+      <div class="reminder-title">Monthly Client Review Window [7 Days]</div>
+      <div>Copy and design should be ready 7 days before a post's live date, so review never eats into the schedule. The gauge next to each client shows the buffer left on their next post.</div>
+    </div>
+
+    <div class="toolbar">
+      <input class="search" id="search-input" placeholder="Search clients…" value="${escapeAttr(state.search)}">
+      <div class="filter-chips ${state.sortMode==='custom'?'chips-disabled':''}">
+        <div class="chip ${state.filterStatus==='all'?'active':''}" data-filter="all">All</div>
+        <div class="chip ${state.filterStatus==='st-active'?'active':''}" data-filter="st-active">Active</div>
+        <div class="chip ${state.filterStatus==='st-onboarding'?'active':''}" data-filter="st-onboarding">Onboarding</div>
+        <div class="chip ${state.filterStatus==='at-risk'?'active':''}" data-filter="at-risk">Priority (≤7d)</div>
+        <div class="chip ${state.filterStatus==='st-boosting'?'active':''}" data-filter="st-boosting">Boosting Only</div>
+      </div>
+      <span class="sort-divider"></span>
+      <div class="chip sort-chip ${state.sortMode==='alpha'?'active':''}" data-sort="alpha">A–Z</div>
+      <div class="chip sort-chip ${state.sortMode==='custom'?'active':''}" data-sort="custom">⠿ Custom order</div>
+      <button class="btn-add" id="add-client-btn">+ Add Client</button>
+    </div>
+    ${state.sortMode==='custom' ? '<div class="drag-hint">Drag clients by the ⠿ handle to group them however makes sense — order saves automatically. Search/filters stay off while reordering so the full list is visible.</div>' : ''}
+
+    <div id="client-list">
+      ${filtered.length ? filtered.map(c => renderClientRow(c)).join('') : '<div class="empty">No clients match this view.</div>'}
+    </div>
+
+    <div class="archive-wrap ${state.archiveOpen ? 'open' : ''}" id="archive-wrap">
+      <div class="archive-toggle" id="archive-toggle">
+        🗄 Archive <span>(${archivedClients.length})</span> <span class="archive-caret">▸</span>
+      </div>
+      <div class="archive-panel">
+        ${archivedClients.length ? archivedClients.map(c => `
+          <div class="archive-row">
+            <span class="cname">${escapeHtml(c.name)}</span>
+            <div class="archive-actions">
+              <button class="restore-btn" data-restore="${c.id}">Restore</button>
+              <button class="delete-btn" data-delete="${c.id}">Delete permanently</button>
+            </div>
+          </div>
+        `).join('') : '<div class="archive-empty">No archived clients.</div>'}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('search-input').oninput = (e)=>{ state.search = e.target.value; render(); const si=document.getElementById('search-input'); si.focus(); si.setSelectionRange(e.target.value.length, e.target.value.length); };
+  document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
+    chip.onclick = ()=>{ state.filterStatus = chip.dataset.filter; render(); };
+  });
+  document.querySelectorAll('.sort-chip').forEach(chip=>{
+    chip.onclick = ()=>{
+      state.sortMode = chip.dataset.sort;
+      if(state.sortMode === 'custom'){ state.filterStatus = 'all'; state.search = ''; }
+      scheduleSave();
+      render();
+    };
+  });
+  document.getElementById('add-client-btn').onclick = addClient;
+
+  if(state.sortMode === 'custom') wireDragAndDrop();
+
+  document.querySelectorAll('.client-head').forEach(head=>{
+    head.onclick = (e)=>{
+      if(e.target.closest('.drag-handle')) return;
+      openClientPanel(head.dataset.toggle);
+    };
+  });
+
+  document.getElementById('archive-toggle').onclick = ()=>{
+    state.archiveOpen = !state.archiveOpen;
+    render();
+  };
+  document.querySelectorAll('[data-restore]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const c = state.clients.find(x=>x.id===btn.dataset.restore);
+      if(c){ c.status = 'Active'; scheduleSave(); render(); }
+    };
+  });
+  document.querySelectorAll('[data-delete]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const c = state.clients.find(x=>x.id===btn.dataset.delete);
+      if(c && confirm(`Permanently delete ${c.name}? This can't be undone.`)){
+        state.clients = state.clients.filter(x=>x.id!==c.id);
+        state.order = state.order.filter(id=>id!==c.id);
+        scheduleSave();
+        render();
+      }
+    };
+  });
+}
+
+function renderClientRow(c){
+  const g = gaugeFor(c);
+  const isActive = state.activeClientId === c.id;
+  return `
+  <div class="client ${isActive?'active-row':''}" data-id="${c.id}">
+    <div class="client-head" data-toggle="${c.id}">
+      ${state.sortMode==='custom' ? `<span class="drag-handle" data-drag="${c.id}">⠿</span>` : `<span class="caret">›</span>`}
+      <span class="cname">${escapeHtml(c.name) || 'Untitled client'}</span>
+      <span class="badge ${statusClass(c.status)}">${escapeHtml(c.status)||'Unset'}</span>
+      <span class="gauge"><span class="pip ${g.cls}"></span>${g.text}</span>
+    </div>
+  </div>`;
+}
+
+function updatePulseOnly(){
+  const p = computePulse();
+  const vals = document.querySelectorAll('.pulse .tval');
+  if(vals.length >= 6){
+    vals[0].textContent = p.totalWeek;
+    vals[1].textContent = p.totalMonth;
+    vals[2].textContent = p.clientCount;
+    vals[3].textContent = p.atRisk;
+    vals[4].textContent = p.errorCount;
+    vals[5].textContent = p.daysNoError;
+  }
+}
+
+/* ============================= CLIENT SLIDE-OVER PANEL ============================= */
+
+function openClientPanel(id){
+  state.activeClientId = id;
+  renderPanel();
+  requestAnimationFrame(()=>{
+    document.getElementById('panel-overlay').classList.add('show');
+    document.getElementById('client-panel').classList.add('show');
+  });
+  document.querySelectorAll('.client').forEach(el=>el.classList.toggle('active-row', el.dataset.id === id));
+}
+
+function closeClientPanel(){
+  document.getElementById('panel-overlay').classList.remove('show');
+  document.getElementById('client-panel').classList.remove('show');
+  document.querySelectorAll('.client').forEach(el=>el.classList.remove('active-row'));
+  state.activeClientId = null;
+}
+
+function renderPanel(){
+  const panel = document.getElementById('client-panel');
+  const c = state.clients.find(x=>x.id===state.activeClientId);
+  if(!c){ panel.innerHTML=''; return; }
+  const g = gaugeFor(c);
+
+  panel.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-close" id="panel-close">✕</button>
+      <input class="panel-title" data-field="name" value="${escapeAttr(c.name)}">
+      <div class="panel-meta">
+        <select class="status-select ${statusClass(c.status)}" data-field="status">
+          ${STATUS_OPTIONS.map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <span class="gauge"><span class="pip ${g.cls}"></span>${g.text}</span>
+      </div>
+    </div>
+    <div class="panel-body">
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('details')}Client Details</div>
+        <div class="prop-row"><div class="prop-label">Platform(s)</div><div class="prop-value"><input class="pv-input" data-field="platforms" value="${escapeAttr(c.platforms)}"></div></div>
+        <div class="prop-row"><div class="prop-label">Point of Contact</div><div class="prop-value"><input class="pv-input" data-field="contact" value="${escapeAttr(c.contact)}"></div></div>
+        <div class="prop-row"><div class="prop-label">Content Calendar Link</div><div class="prop-value"><input class="pv-input" data-field="calendarLink" value="${escapeAttr(c.calendarLink)}" placeholder="https://…"></div></div>
+        <div class="prop-row"><div class="prop-label">Posting Cadence</div><div class="prop-value"><input class="pv-input" data-field="cadence" value="${escapeAttr(c.cadence)}"></div></div>
+        <div class="prop-row"><div class="prop-label">Final Post Date (Cutoff)</div><div class="prop-value"><input class="pv-input" type="date" data-field="finalPost" value="${escapeAttr(c.finalPost)}"></div></div>
+        <div class="prop-row"><div class="prop-label">Next Scheduled Post</div><div class="prop-value"><input class="pv-input" type="date" data-field="nextPost" value="${escapeAttr(c.nextPost)}"></div></div>
+        ${c.calendarLink ? `<div class="link-line"><a href="${escapeAttr(c.calendarLink)}" target="_blank" rel="noopener">Open content calendar →</a></div>` : ''}
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('scope')}Scope & Ownership</div>
+        <div class="prop-row">
+          <div class="prop-label">Copywriting</div>
+          <div class="prop-value split">
+            <input class="pv-input" data-scope="Copywriting" placeholder="Assigned to…" value="${escapeAttr((c.scope||{}).Copywriting||'')}">
+            <span class="pv-divider">·</span>
+            <input class="pv-input" data-field="aiAgentLink" placeholder="AI Agent Copywriter link" value="${escapeAttr(c.aiAgentLink)}">
+          </div>
+        </div>
+        <div class="prop-row"><div class="prop-label">Design</div><div class="prop-value"><input class="pv-input" data-scope="Design" placeholder="Assigned to…" value="${escapeAttr((c.scope||{}).Design||'')}"></div></div>
+        <div class="prop-row"><div class="prop-label">Scheduling</div><div class="prop-value"><input class="pv-input" data-scope="Scheduling" placeholder="Assigned to…" value="${escapeAttr((c.scope||{}).Scheduling||'')}"></div></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('security')}Account Security</div>
+        <div class="prop-row">
+          <div class="prop-label">Login details secured in LastPass?</div>
+          <div class="prop-value">
+            <select class="pv-select" data-field="lastpass">
+              ${LASTPASS_OPTIONS.map(o=>`<option ${o===c.lastpass?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="prop-row"><div class="prop-label">Vault / Folder Notes</div><div class="prop-value"><input class="pv-input" data-field="lastpassNotes" placeholder="e.g. Shared-Clients folder" value="${escapeAttr(c.lastpassNotes)}"></div></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('boosted')}Monthly Boosted Content</div>
+        <div class="prop-row">
+          <div class="prop-label">Expected?</div>
+          <div class="prop-value">
+            <select class="pv-select" data-field="boosted">${BOOST_OPTIONS.map(o=>`<option ${o===c.boosted?'selected':''}>${o}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="prop-row"><div class="prop-label">Detail</div><div class="prop-value"><input class="pv-input" data-field="boostedNote" value="${escapeAttr(c.boostedNote)}"></div></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('volume')}This Client's Volume</div>
+        <div class="row3-panel">
+          <div class="prop-row"><div class="prop-label">This Week</div><div class="prop-value"><input class="pv-input" type="number" min="0" data-field="postsWeek" value="${c.postsWeek||0}"></div></div>
+          <div class="prop-row"><div class="prop-label">This Month</div><div class="prop-value"><input class="pv-input" type="number" min="0" data-field="postsMonth" value="${c.postsMonth||0}"></div></div>
+        </div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('errors')}Error Log</div>
+        <div id="errlog-${c.id}">
+          ${(c.errorLog||[]).map((e,i)=>`
+            <div class="errlog-item">
+              <input class="pv-input" type="date" data-err-idx="${i}" data-err-field="date" value="${escapeAttr(e.date||'')}">
+              <input class="pv-input" type="text" data-err-idx="${i}" data-err-field="description" value="${escapeAttr(e.description||'')}" placeholder="What happened">
+              <select class="pv-select" data-err-idx="${i}" data-err-field="resolved">
+                <option value="N" ${e.resolved==='N'?'selected':''}>Open</option>
+                <option value="Y" ${e.resolved==='Y'?'selected':''}>Resolved</option>
+              </select>
+              <button class="rm-btn" data-rm-err="${i}" title="Remove">✕</button>
+            </div>`).join('') || '<div class="no-errors">No errors logged.</div>'}
+        </div>
+        <button class="small-btn" id="add-err-btn">+ Log an error</button>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-label">${icon('notes')}Notes / Flags</div>
+        <textarea class="pv-textarea" data-field="notes">${escapeHtml(c.notes)}</textarea>
+      </div>
+
+    </div>
+  `;
+
+  wirePanel(c);
+}
+
+function wirePanel(c){
+  const panel = document.getElementById('client-panel');
+
+  document.getElementById('panel-close').onclick = closeClientPanel;
+
+  panel.querySelectorAll('[data-field]').forEach(input=>{
+    const field = input.dataset.field;
+    const eventType = (input.tagName==='SELECT'||input.type==='date') ? 'change' : 'input';
+    input.addEventListener(eventType, ()=>{
+      let val = input.value;
+      if(field === 'postsWeek' || field === 'postsMonth') val = parseInt(val)||0;
+      c[field] = val;
+      scheduleSave();
+      if(field === 'status' || field === 'nextPost' || field === 'name'){
+        render();
+        // re-apply active highlight + keep panel open on the same client
+        document.querySelectorAll('.client').forEach(el=>el.classList.toggle('active-row', el.dataset.id === c.id));
+      } else if(field === 'postsWeek' || field === 'postsMonth'){
+        updatePulseOnly();
+      }
+    });
+  });
+
+  panel.querySelectorAll('[data-scope]').forEach(input=>{
+    input.oninput = ()=>{
+      c.scope = c.scope || {};
+      c.scope[input.dataset.scope] = input.value;
+      scheduleSave();
+    };
+  });
+
+  panel.querySelectorAll('[data-err-idx]').forEach(input=>{
+    const idx = parseInt(input.dataset.errIdx);
+    const field = input.dataset.errField;
+    input.addEventListener(input.tagName==='SELECT'?'change':'input', ()=>{
+      c.errorLog[idx][field] = input.value;
+      scheduleSave();
+      updatePulseOnly();
+    });
+  });
+
+  panel.querySelectorAll('[data-rm-err]').forEach(btn=>{
+    btn.onclick = ()=>{
+      c.errorLog.splice(parseInt(btn.dataset.rmErr),1);
+      scheduleSave();
+      renderPanel();
+      updatePulseOnly();
+    };
+  });
+
+  const addErrBtn = document.getElementById('add-err-btn');
+  if(addErrBtn){
+    addErrBtn.onclick = ()=>{
+      c.errorLog = c.errorLog || [];
+      c.errorLog.push({date:'', description:'', resolved:'N'});
+      scheduleSave();
+      renderPanel();
+    };
+  }
+}
+
+document.getElementById('panel-overlay').addEventListener('click', closeClientPanel);
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && state.activeClientId) closeClientPanel();
+});
+
+/* ============================= DRAG & DROP REORDER ============================= */
+
+let dragState = null;
+
+function wireDragAndDrop(){
+  document.querySelectorAll('.drag-handle').forEach(handle=>{
+    handle.onpointerdown = (e)=>{
+      e.preventDefault();
+      const clientEl = handle.closest('.client');
+      dragState = { id: handle.dataset.drag, targetId: null, before: true };
+      clientEl.classList.add('dragging');
+      document.addEventListener('pointermove', onDragPointerMove);
+      document.addEventListener('pointerup', onDragPointerUp, { once: true });
+    };
+  });
+}
+
+function onDragPointerMove(e){
+  if(!dragState) return;
+  document.querySelectorAll('.client').forEach(el=>el.classList.remove('drag-over-top','drag-over-bottom'));
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const target = under ? under.closest('.client') : null;
+  if(target && target.dataset.id !== dragState.id){
+    const rect = target.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    target.classList.toggle('drag-over-top', before);
+    target.classList.toggle('drag-over-bottom', !before);
+    dragState.targetId = target.dataset.id;
+    dragState.before = before;
+  } else {
+    dragState.targetId = null;
+  }
+}
+
+function onDragPointerUp(){
+  document.removeEventListener('pointermove', onDragPointerMove);
+  document.querySelectorAll('.client').forEach(el=>el.classList.remove('dragging','drag-over-top','drag-over-bottom'));
+  if(dragState && dragState.targetId){
+    state.order = state.order.filter(id => id !== dragState.id);
+    let idx = state.order.indexOf(dragState.targetId);
+    if(idx === -1) idx = state.order.length;
+    state.order.splice(dragState.before ? idx : idx + 1, 0, dragState.id);
+    scheduleSave();
+    render();
+  }
+  dragState = null;
+}
+
+/* ============================= ADD CLIENT ============================= */
+
+function addClient(){
+  const c = {
+    id: uid(), name:'New Client', platforms:'', contact:'', calendarLink:'', finalPost:'', nextPost:'',
+    cadence:'', status:'Active', postsWeek:0, postsMonth:0, boosted:'Not specified',
+    boostedNote:'', scope:{Copywriting:'',Design:'',Scheduling:''}, aiAgentLink:'',
+    lastpass:'Not yet confirmed', lastpassNotes:'', notes:'', errorLog:[]
+  };
+  state.clients.push(c);
+  state.order.push(c.id);
+  scheduleSave();
+  render();
+  openClientPanel(c.id);
+}
+
+fauth.onAuthStateChanged(function(u){ if(u){ loadData(); } else { fauth.signInAnonymously().catch(function(e){ console.error(e); }); } });
+@@SCRIPT_CLOSE@@
+</body>
+</html>
+</script>
+
+    <script>
+      (function(){
+        var tabs = document.querySelectorAll('.cmshell-tab');
+        var panels = { clientmap: document.getElementById('tab-clientmap'), social: document.getElementById('tab-social') };
+        var frame = document.getElementById('social-frame');
+        var injected = false;
+        function sizeFrame(){
+          var bar = document.getElementById('cmshell-tabs');
+          frame.style.height = (window.innerHeight - bar.offsetHeight) + 'px';
+        }
+        function injectSocial(){
+          if(injected) return;
+          var raw = document.getElementById('social-src').textContent;
+          frame.srcdoc = raw.split('@@SCRIPT_CLOSE@@').join('</'+'script>');
+          injected = true;
+        }
+        function activate(name){
+          tabs.forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
+          panels.clientmap.hidden = (name!=='clientmap');
+          panels.social.hidden = (name!=='social');
+          if(name==='social'){ injectSocial(); sizeFrame(); }
+        }
+        tabs.forEach(function(t){ t.onclick = function(){ activate(t.dataset.tab); }; });
+        window.addEventListener('resize', function(){ if(!panels.social.hidden) sizeFrame(); });
+        activate('clientmap');
+      })();
     </script>
 </body>
 </html>
